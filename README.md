@@ -4,10 +4,6 @@ A from-scratch reproduction of GPT-2 (124M), built to deeply understand transfor
 
 This project follows the goal of training a 124M-parameter language model end-to-end on a single RTX 4090.
 
-## Status
-
-Phase 0 — setup. See [Roadmap](#roadmap).
-
 ## Why this repo exists
 
 Calling an API is one thing. Building the thing the API calls is another. The point of this project is the second kind of understanding: writing the attention mechanism by hand, watching gradients flow, debugging shape mismatches, profiling kernel launches, and having a model I trained from random weights to coherent(ish) English.
@@ -25,19 +21,6 @@ scripts/        train.py, sample.py, eval.py
 data/           training data (gitignored)
 checkpoints/    saved models (gitignored)
 ```
-
-## Roadmap
-
-| Phase | What |
-|-------|------|
-| 0 | Project scaffold, env, PyTorch warm-up |
-| 1 | GPT-2 architecture from scratch; verify by loading HF pretrained weights |
-| 2 | Tokenizer, DataLoader, overfit on TinyShakespeare |
-| 3 | LR schedule, weight decay, gradient clipping, gradient accumulation, FineWeb-Edu prep |
-| 4 | bf16, Flash Attention, `torch.compile`, profiling |
-| 5 | Full training run on FineWeb-Edu 10B tokens (~3-5 days on a 4090) |
-| 6 | HellaSwag eval, sample CLI, polish |
-| 7 | *(Optional)* C++ inference engine — port to llm.c style |
 
 ## Hardware
 

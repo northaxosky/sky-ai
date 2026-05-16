@@ -1,12 +1,14 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from typing import cast
-import math
-import torch, torch.nn as nn
+import torch, torch.nn as nn, torch.distributed as dist, numpy as np
 from torch.nn import functional as F
-import sys
-import time
-import inspect
+from torch.nn.parallel import DistributedDataParallel as DDP
+import sys, os, time, math, inspect, tiktoken
+from torch.distributed import init_process_group, destroy_process_group
+from pathlib import Path
+
+from skyai.eval.hellaswag import iterate_examples, render_example, get_most_likely_row
 
 # ===============================
 
@@ -230,8 +232,8 @@ class GPT(nn.Module):
         ]
         num_decay_params = sum(p.numel() for p in decay_params)
         num_nodecay_params = sum(p.numel() for p in nodecay_params)
-        print(f'# Decated Parameters Tensors: {len(decay_params)}, with {num_decay_params:,} parameters')
-        print(f'# Non-decayed Parameter Tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters')
+        print(f'# Decayed Parameters Tensors: {len(decay_params)}, with {num_decay_params:,} parameters')
+        print(f'# Non-Decayed Parameter Tensors: {len(nodecay_params)}, with {num_nodecay_params:,} parameters')
 
         # Create AdamW optimizer and use the fused version if it is available
         fused_available = 'fused' in inspect.signature(torch.optim.AdamW).parameters
@@ -240,67 +242,126 @@ class GPT(nn.Module):
         return optimizer
 
 # ============================================
-import tiktoken
+def load_tokens(filename):
+    npt = np.load(filename)
+    ptt = torch.tensor(npt, dtype=torch.long)
+    return ptt
 
 class DataLoaderLite:
-    def __init__(self, B: int, T: int):
+    def __init__(self, B: int, T: int, process_rank: int, num_processes: int, split: str):
         self.B = B
         self.T = T
+        self.process_rank = process_rank
+        self.num_processes = num_processes
+        assert split in {'train', 'val'}
 
-        # Load tokens from disk and store in memory
-        with open('../../data/shakespeare.txt', 'r') as file:
-            text = file.read()
-        enc = tiktoken.get_encoding('gpt2')
-        self.tokens = torch.tensor(enc.encode(text))
+        # Get the shard filenames
+        data_root = Path(__file__).resolve().parent.parent.parent / "data" / "edu_fineweb10B"
+        shards = os.listdir(data_root)
+        shards = [s for s in shards if split in s]
+        shards = sorted(shards)
+        shards = [os.path.join(data_root, s) for s in shards]
+        self.shards = shards
+        assert len(shards) > 0, f'No shards found for split: {split}.'
+        if master_process:
+            print(f'Found {len(shards)} shards for split: {split}')
+        self.reset()
 
-        print(f'Loaded {len(self.tokens)} tokens')
-        print(f'1 Epoch = {len(self.tokens) // (B * T)} batches')
-
-        self.current_position = 0
+    def reset(self):
+        # State, init at shard zero
+        self.current_shard = 0
+        self.tokens = load_tokens(self.shards[self.current_shard])
+        self.current_position = self.B * self.T * self.num_processes
     
     def next_batch(self) -> tuple[torch.Tensor, torch.Tensor]:
         B, T = self.B, self.T
         buf = self.tokens[self.current_position : self.current_position + (B * T) + 1]
+
+        # Inputs & Targets
         x = (buf[:-1]).view(B, T)
         y = (buf[1:]).view(B, T)
 
         # Advance the position in the tensor
-        self.current_position += B * T
+        self.current_position += B * T * self.num_processes
         
-        # If loading the next batch would be out of bounds: reset
-        if self.current_position + (B * T) + 1 > len(self.tokens):
-            self.current_position = 0
+        # If loading the next batch would be out of bounds: advance to next shard
+        if self.current_position + (B * T * self.num_processes + 1) > len(self.tokens):
+            self.current_shard = (self.current_shard + 1) % len(self.shards)
+            self.tokens = load_tokens(self.shards[self.current_shard])
+            self.current_position = B * T * self.process_rank
         return x, y
 
 # ============================================
-# Attempt to auto-detect the device
-device = 'cpu'
-if torch.cuda.is_available():
-    device = 'cuda'
-elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
-    device = 'mps'
-print(f'Using device: {device}')
+# Set up distributed data parallel
+ddp = int(os.environ.get('RANK', -1)) != -1
+
+# torchrun --standalone --nproc_per_node=x model.py
+if ddp:
+    # Use of DDP requires CUDA
+    assert torch.cuda.is_available(), "DDP requires CUDA/GPU"
+    init_process_group(backend='nccl')
+    ddp_rank = int(os.environ['RANK'])
+    ddp_local_rank = int(os.environ['LOCAL_RANK'])
+    ddp_world_size = int(os.environ['WORLD_SIZE'])
+    device = f'cuda:{ddp_local_rank}'
+    torch.cuda.set_device(device)
+    master_process = ddp_rank == 0
+    print(f'Using Distributed Data Parallel w/ #{ddp_world_size}')
+else:
+    # Non ddp run
+    ddp_rank = 0
+    ddp_local_rank = 0
+    ddp_world_size = 1
+    master_process = True
+
+    # Attempt to auto detect device
+    device = 'cpu'
+    if torch.cuda.is_available():
+        device = 'cuda'
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        device = 'mps'
+    print(f'Non-DDP using device: {device}')
 
 torch.manual_seed(1337)
 if torch.cuda.is_available():
     torch.cuda.manual_seed(1337)
 
-# Train loader
-train_loader = DataLoaderLite(B=16, T=1024)
+total_batch_size = 524288
+
+# Micro Batch Size & Sequence Length
+B = 16
+T = 1024
+assert total_batch_size % (B * T * ddp_world_size) == 0, "Make sure total_batch_size is divisible by B * T"
+grad_accum_steps = total_batch_size // (B * T * ddp_world_size)
+if master_process:
+    print(f'Total desired batch size: {total_batch_size}')
+    print(f'> Calculated gradient accumulation steps: {grad_accum_steps}')
+
+# Train/Data loader
+train_loader = DataLoaderLite(B=B, T=T, process_rank=ddp_rank, num_processes=ddp_world_size, split='train')
+val_loader = DataLoaderLite(B=B, T=T, process_rank=ddp_rank, num_processes=ddp_world_size, split='val')
 torch.set_float32_matmul_precision('high')
 
-# model = GPT.from_pretrained('gpt2-xl')
+# Create model
 model = GPT(GPTConfig(vocab_size=50304))
+# model = GPT.from_pretrained('gpt2-xl')
 model.to(device)
 if sys.platform == 'linux':
     model = torch.compile(model)
     print('Using torch-compiled GPT')
+if ddp:
+    model = DDP(model, device_ids=[ddp_local_rank])
+# raw_model unwraps both DDP and torch.compile so we can call methods like
+# configure_optimizers, and use eager-mode forward for sampling (where compile's
+# changing-shape recompiles would dominate runtime).
+raw_model = model.module if ddp else model
+raw_model = raw_model._orig_mod if hasattr(raw_model, '_orig_mod') else raw_model # pyright: ignore
 
-# Cosine decay learning rate
+# Cosine decay learning rate (GPT-3)
 max_lr = 6e-4
 min_lr = max_lr * 0.1
-warmup_steps = 10
-max_steps = 50
+warmup_steps = 715
+max_steps = 19073
 
 def get_lr(it):
     # Linear warmup for warmup_iters steps, min learning rate when past max steps
@@ -315,63 +376,161 @@ def get_lr(it):
     coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
     return min_lr + coeff * (max_lr - min_lr)
 
-optimizer = model.configure_optimizers(weight_decay=0.1, learning_rate=6e-4, device=device)
-optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, betas=(0.9, 0.95), eps=1e-8) # pyright: ignore
+optimizer = raw_model.configure_optimizers(weight_decay=0.1, learning_rate=6e-4, device=device) # pyright: ignore
+enc = tiktoken.get_encoding('gpt2')
 
-for step in range(50):
+# Create a log directory where we can write checkpoints & logs
+log_dir = 'logs'
+os.makedirs(log_dir, exist_ok=True)
+log_file = os.path.join(log_dir, 'log.txt')
+with open(log_file, 'w') as file:
+    pass
+
+for step in range(max_steps):
     t0 = time.time()
-    x, y = train_loader.next_batch()
-    x, y = x.to(device), y.to(device)
+    last_step = (step == max_steps - 1)
+
+    # Evaluate our validation loss
+    if step % 250 == 0 or last_step:
+        model.eval()
+        val_loader.reset()
+
+        with torch.no_grad():
+            val_loss_accum = 0.0
+            val_loss_steps = 20
+
+            for _ in range(val_loss_steps):
+                x, y = val_loader.next_batch()
+                x, y = x.to(device), y.to(device)
+
+                with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                    logits, loss = model(x, y)
+                loss = loss / val_loss_steps
+                val_loss_accum += loss.detach()
+        if ddp:
+            dist.all_reduce(val_loss_accum, op=dist.ReduceOp.AVG)
+        if master_process:
+            print(f'Validation Loss: {val_loss_accum:.4f}')
+            with open(log_file, 'a') as file:
+                file.write(f'Step: {step}, Validation Loss: {val_loss_accum:.4f}\n')
+
+    # Evaluate hellaswag
+    if (step % 250 == 0 or last_step):
+        model.eval()
+        num_correct_norm = 0
+        num_total = 0
+
+        for i, example in enumerate(iterate_examples('val')):
+            if i % ddp_world_size != ddp_rank:
+                continue
+            
+            # Render the example into tokens and labels
+            _, tokens, mask, label = render_example(example)
+            tokens = tokens.to(device)
+            mask = mask.to(device)
+
+            # Get the logits (raw_model: avoid torch.compile recompile per varying example length)
+            with torch.no_grad():
+                with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                    logits, loss = raw_model(tokens) # pyright: ignore
+                pred_norm = get_most_likely_row(tokens, mask, logits)
+            num_total += 1
+            num_correct_norm += int(pred_norm == label)
+
+        # Reduce the stats across all processes
+        if ddp:
+            num_total = torch.tensor(num_total, dtype=torch.long, device=device)
+            num_correct_norm = torch.tensor(num_correct_norm, dtype=torch.long, device=device)
+
+            dist.all_reduce(num_total, op=dist.ReduceOp.SUM)
+            dist.all_reduce(num_correct_norm, op=dist.ReduceOp.SUM)
+
+            num_total = num_total.item()
+            num_correct_norm = num_correct_norm.item()
+        acc_norm = num_correct_norm / num_total
+
+        # Log the results
+        if master_process:
+            print(f'HellaSwag Accuracy: {num_correct_norm} / {num_total} = {acc_norm:.4f}')
+            with open(log_file, 'a') as file:
+                file.write(f'Step: {step}, HellaSwag: {acc_norm:.4f}\n')
+
+    # Evaluate sampling of the model
+    if ((step % 250 == 0 and step != 0) or last_step):
+        model.eval()
+        num_return_sequences = 4
+        max_length = 32
+        tokens = enc.encode("Hello, I'm a language model,")
+        tokens = torch.tensor(tokens, dtype=torch.long)
+        tokens = tokens.unsqueeze(0).repeat(num_return_sequences, 1)
+        x = tokens.to(device)
+        sample_rng = torch.Generator(device=device)
+        sample_rng.manual_seed(42 + ddp_rank)
+
+        while x.size(1) < max_length:
+            # Forward the model to get the logits
+            with torch.no_grad():
+                with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                    logits = raw_model(x) # pyright: ignore
+
+                # Take the logits at the last position & get the probabilities
+                logits = logits[:, -1, :]
+                probs = F.softmax(logits, dim=-1)
+
+                # do top-k sampling of 50 & select a token 
+                topk_probs, topk_indices = torch.topk(probs, 50, dim=-1)
+                ix = torch.multinomial(topk_probs, 1)
+
+                # Gather the corresponding indices & append to the sequence
+                xcol = torch.gather(topk_indices, -1, ix)
+                x = torch.cat((x, xcol), dim=1)
+
+        # Print the generated text
+        for i in range(num_return_sequences):
+            tokens = x[i, :max_length].tolist()
+            decoded = enc.decode(tokens)
+            print(f'Rank: {ddp_rank}, Sample: {i + 1} > {decoded}')
+
+    # Training Loop
+    model.train()
     optimizer.zero_grad()
+    loss_accum = 0  
+    for micro_step in range(grad_accum_steps):
+        x, y = train_loader.next_batch()
+        x, y = x.to(device), y.to(device)
 
-    # Use bfloat16 for optimal speed/precision
-    with torch.autocast(device_type=device, dtype=torch.bfloat16):
-        logits, loss = model(x, y)
+        # Use bfloat16 for optimal speed/precision
+        with torch.autocast(device_type=device, dtype=torch.bfloat16):
+            logits, loss = model(x, y)
 
-    loss.backward()
+        # Scale the loss to account for gradient accumulation
+        loss = loss / grad_accum_steps
+        loss_accum += loss.detach()
+        if ddp:
+            model.require_backward_grad_sync = (micro_step == grad_accum_steps -1) # pyright: ignore
+        loss.backward()
+    
+    if ddp:
+        dist.all_reduce(loss_accum, op=dist.ReduceOp.AVG)
+    
     norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
+    # Determine and set the learning rate for this iteration
     lr = get_lr(step)
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
     optimizer.step()
     torch.cuda.synchronize()
+
+    # Track statistics
     t1 = time.time()
     dt = (t1 - t0) * 1000
-    tokens_sec = (train_loader.B * train_loader.T) / (t1 - t0)
-    print(f'Step {step + 1}, LR: {lr:.4f}  Loss: {loss.item()}, Norm: {norm:.4f}, dT: {dt:.2f}ms, Tok/sec: {tokens_sec:.2f}')    
+    tokens_processed = train_loader.B * train_loader.T * grad_accum_steps * ddp_world_size
+    tokens_sec = tokens_processed / (dt / 1000)
+    if master_process:
+        print(f'Step {step + 1} | LR: {lr:.4e} | Loss: {loss_accum:.6f} | Norm: {norm:.4f} | dT: {dt:.2f}ms | Tok/sec: {tokens_sec:.2f}')    
+        with open(log_file, 'a') as file:
+            file.write(f'Step: {step}, Training Loss: {loss_accum:.6f}\n')
 
-sys.exit(0)
-# ============================================
-# enc = tiktoken.get_encoding('gpt2')
-# tokens = enc.encode("Hello, I am a language model,")
-# tokens = torch.tensor(tokens, dtype=torch.long)
-# tokens = tokens.unsqueeze(0).repeat(num_return_sequences, 1)
-# x = tokens.to(device)
-
-# # Generation
-# torch.manual_seed(42)
-# torch.cuda.manual_seed(42)
-
-# while x.size(1) < max_length:
-#     # Forward the model to get the logits
-#     with torch.no_grad():
-#         logits = model(x)
-
-#         # Take the logits at the last position & get the probabilities
-#         logits = logits[:, -1, :]
-#         probs = F.softmax(logits, dim=-1)
-
-#         # do top-k sampling of 50 & select a token 
-#         topk_probs, topk_indices = torch.topk(probs, 50, dim=-1)
-#         ix = torch.multinomial(topk_probs, 1)
-
-#         # Gather the corresponding indices & append to the sequence
-#         xcol = torch.gather(topk_indices, -1, ix)
-#         x = torch.cat((x, xcol), dim=1)
-
-# # Print the generated text
-# for i in range(num_return_sequences):
-#     tokens = x[i, :max_length].tolist()
-#     decoded = enc.decode(tokens)
-#     print(f'> {decoded}')
+if ddp:
+    destroy_process_group()

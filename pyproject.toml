@@ -17,6 +17,7 @@ dependencies = [
     "regex>=2026.4.4",
     "ipywidgets>=8.1.8",
     "requests>=2.33.1",
+    "python-dotenv>=1.2.2",
 ]
 
 [dependency-groups]

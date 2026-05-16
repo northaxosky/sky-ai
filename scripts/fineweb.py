@@ -117,6 +117,10 @@ def main() -> None:
             shard_index += 1
 
             if args.max_shards and shard_index >= args.max_shards:
+                # Terminate explicitly before returning to avoid the Windows
+                # mp.Pool teardown race ("concurrent send_bytes() calls").
+                pool.terminate()
+                pool.join()
                 return
 
             leftover = tokens[remainder:]

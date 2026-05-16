@@ -50,7 +50,14 @@ pythonpath = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+extend-exclude = ["notebooks"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM"]
-ignore = ["E501"]
+ignore = [
+    "E501",   # Line too long (handled by formatter)
+    "N803",   # Argument name should be lowercase (PyTorch uses B, T, C)
+    "N806",   # Variable in function should be lowercase (PyTorch uses B, T, C)
+    "N812",   # Lowercase imported as non-lowercase (F for torch.nn.functional)
+    "N817",   # camelCase imported as acronym
+]

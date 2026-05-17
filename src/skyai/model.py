@@ -401,7 +401,9 @@ if torch.cuda.is_available():
 total_batch_size = 524288
 
 # Micro Batch Size & Sequence Length
-B = 16
+# B=64 matches Karpathy reference. Requires ~25GB VRAM per GPU (40GB+ recommended).
+# For local dev on smaller GPUs (e.g., 4090 24GB), drop to B=16.
+B = 64
 T = 1024
 assert total_batch_size % (B * T * ddp_world_size) == 0, (
     "Make sure total_batch_size is divisible by B * T"

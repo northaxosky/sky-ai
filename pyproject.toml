@@ -68,3 +68,7 @@ ignore = [
     "N812",   # Lowercase imported as non-lowercase (F for torch.nn.functional)
     "N817",   # camelCase imported as acronym
 ]
+
+[tool.pyright]
+include = ["src", "tests"]
+extraPaths = ["src"]

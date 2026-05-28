@@ -36,4 +36,3 @@ class CosineSchedule:
 
         return self.min_lr + coeff * (self.max_lr - self.min_lr)
     
-    

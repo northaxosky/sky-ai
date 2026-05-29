@@ -20,6 +20,10 @@ import torch
 from torch.nn import functional as F  # noqa: N812
 from tqdm import tqdm
 
+from skyai.log import get_logger
+
+logger = get_logger(__name__)
+
 DATA_CACHE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "data" / "hellaswag"
 
 HELLASWAG_URLS = {
@@ -53,7 +57,7 @@ def download(split: str) -> None:
     DATA_CACHE_DIR.mkdir(parents=True, exist_ok=True)
     data_filename = DATA_CACHE_DIR / f"hellaswag_{split}.jsonl"
     if not data_filename.exists():
-        print(f"Downloading {HELLASWAG_URLS[split]} to {data_filename}...")
+        logger.info("Downloading %s to %s", HELLASWAG_URLS[split], data_filename)
         download_file(HELLASWAG_URLS[split], data_filename)
 
 

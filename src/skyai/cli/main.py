@@ -153,9 +153,15 @@ def sample(
         typer.echo(text)
 
 @app.command()
-def doctor() -> None:
+def doctor(
+    config: Annotated[
+        Path | None,
+        typer.Option("--config", "-c", help="Optional config to also check data/checkpoint paths"),
+    ] = None,
+) -> None:
     """Environment + project sanity checks"""
-    typer.echo("Not yet implemented")
+    from skyai.cli.doctor import run_doctor
+    raise typer.Exit(run_doctor(config_path=config))
 
 if __name__ == "__main__":
     app()

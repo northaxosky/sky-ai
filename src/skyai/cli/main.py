@@ -13,9 +13,9 @@ import typer
 from skyai.checkpoint import load_checkpoint
 from skyai.config.loader import load_config
 from skyai.config.schema import RunConfig
-from skyai.generate import generate
 from skyai.log import get_logger, setup_logging
 from skyai.nn.model import GPT, GPTConfig
+from skyai.sample import sample as sample_fn
 
 app = typer.Typer(
     name="skyai",
@@ -106,42 +106,51 @@ def evaluate(
 @app.command()
 def sample(
         checkpoint: Annotated[Path, typer.Option(help="Checkpoint path (.pt, .json, dir)")],
-        prompt: Annotated[str, typer.Option(help="Prompt text")] = "Hello, I am a language model",
-        max_new_tokens: Annotated[int, typer.Option(help="Tokens to generate")] = 50,
-        temperature: Annotated[float, typer.Option(help="Sampling temperature")] = 1.0,
-        top_k: Annotated[int, typer.Option(help="Top-k sampling cutoff")] = 50,
+        prompt: Annotated[str, typer.Option(help="Prompt text")] = "Hello, I'm a language model,",
+        num_samples: Annotated[int, typer.Option(help="Number of completions to generate")] = 1,
+        max_new_tokens: Annotated[int, typer.Option(help="Tokens to generate beyond the prompt")] = 50,
+        temperature: Annotated[float, typer.Option(help="Sampling temperature (>0)")] = 1.0,
+        top_k: Annotated[int, typer.Option(help="Top-k cutoff; 0 disables")] = 50,
         seed: Annotated[int | None, typer.Option(help="RNG seed for reproducibility")] = None,
-        device: Annotated[str, typer.Option(help="cuda or cpu")] = "cuda",
+        device: Annotated[str, typer.Option(help="auto, cuda, cuda:N, or cpu")] = "auto",
 ) -> None:
     """Generate text from a trained checkpoint"""
     import tiktoken
 
+    if device == "auto":
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+
     bundle = load_checkpoint(checkpoint)
     mc = bundle.config.model
-    model = GPT(GPTConfig(n_layer=mc.n_layer,
-                          n_head=mc.n_head,
-                          n_embed=mc.n_embed,
-                          vocab_size=mc.vocab_size,
-                          block_size=mc.block_size
-                          ))
+    model = GPT(GPTConfig(
+        n_layer=mc.n_layer, n_head=mc.n_head, n_embed=mc.n_embed,
+        vocab_size=mc.vocab_size, block_size=mc.block_size,
+    ))
     model.load_state_dict(bundle.model_state)
     model.to(device).eval()
 
-    enc = tiktoken.get_encoding(bundle.config.model.tokenizer)
-    prompt_ids = torch.tensor([enc.encode(prompt)], dtype=torch.long, device=device)
+    enc = tiktoken.get_encoding(mc.tokenizer)
 
     rng: torch.Generator | None = None
     if seed is not None:
         rng = torch.Generator(device=device).manual_seed(seed)
 
-    out = generate(model, prompt_ids,
-                   max_new_tokens=max_new_tokens,
-                   max_context_len=mc.block_size,
-                   temperature=temperature,
-                   top_k=top_k,
-                   generator=rng
-                   )
-    typer.echo(enc.decode(out[0].tolist()))
+    prompt_len = len(enc.encode(prompt))
+    completions = sample_fn(
+        model, enc, prompt,
+        n_samples=num_samples,
+        max_length=prompt_len + max_new_tokens,
+        device=device,
+        temperature=temperature,
+        top_k=top_k if top_k > 0 else None,
+        generator=rng,
+        max_context_len=mc.block_size,
+    )
+
+    for i, text in enumerate(completions):
+        if num_samples > 1:
+            typer.echo(f"--- sample {i + 1}/{num_samples} ---")
+        typer.echo(text)
 
 @app.command()
 def doctor() -> None:

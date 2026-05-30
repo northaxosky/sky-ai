@@ -20,9 +20,9 @@ from skyai.checkpoint import load_checkpoint, restore_rng, save_checkpoint
 from skyai.config.schema import RunConfig
 from skyai.data.loader import DataLoader
 from skyai.eval import run_evals
-from skyai.generate import generate
 from skyai.log import get_logger
 from skyai.nn.model import GPT, GPTConfig
+from skyai.sample import sample
 from skyai.training.optimizer import build_optimizer
 from skyai.training.schedule import CosineSchedule
 from skyai.wandb_logger import WandbLogger
@@ -226,32 +226,6 @@ def _run_val_loss(
         dist.all_reduce(val_loss_accum, op=dist.ReduceOp.AVG)
     return float(val_loss_accum.item())
 
-def _sample_text(
-    raw_model: GPT,
-    encoder: tiktoken.Encoding,
-    *,
-    prompt: str,
-    n_samples: int,
-    max_length: int,
-    device: str,
-    rank: int,
-) -> list[str]:
-    """Generate n_samples completions of `prompt` up to max_length tokens"""
-    prompt_ids = encoder.encode(prompt)
-    x = torch.tensor(prompt_ids, dtype=torch.long, device=device).unsqueeze(0)
-    x = x.repeat(n_samples, 1)
-
-    rng = torch.Generator(device=device).manual_seed(42 + rank)
-    out = generate(
-        raw_model, x,
-        max_new_tokens=max_length - x.size(1),
-        max_context_len=raw_model.config.block_size,
-        temperature=1.0,
-        top_k=50,
-        generator=rng,
-    )
-    return [encoder.decode(out[i].tolist()) for i in range(n_samples)]
-
 def train(cfg: RunConfig, *, resume: bool = False) -> None:
     """End-to-end training loop, single-process or DDP via torchrun"""
     dist_info = _init_distributed()
@@ -317,11 +291,13 @@ def train(cfg: RunConfig, *, resume: bool = False) -> None:
 
             # ---- Periodic sampling (skip step 0: untrained model produces noise) ----
             if step > 0 and (step % cfg.eval.interval == 0 or last_step):
-                samples = _sample_text(
-                    raw_model, encoder,
-                    prompt=cfg.eval.sample_prompt,
-                    n_samples=cfg.eval.sample_n, max_length=cfg.eval.sample_max_length,
-                    device=device, rank=dist_info.rank,
+                rng = torch.Generator(device=device).manual_seed(42 + dist_info.rank)
+                samples = sample(
+                    raw_model, encoder, cfg.eval.sample_prompt,
+                    n_samples=cfg.eval.sample_n,
+                    max_length=cfg.eval.sample_max_length,
+                    device=device,
+                    generator=rng,
                 )
                 if dist_info.is_master:
                     for i, s in enumerate(samples):

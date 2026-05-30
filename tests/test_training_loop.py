@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-import tiktoken
 import torch
 
 from skyai.checkpoint import save_checkpoint
@@ -273,18 +272,3 @@ class TestRunValLoss:
             val_steps=1, device="cpu", device_type="cpu", dtype=torch.float32,
         )
         assert model.training is False
-
-
-class TestSampleText:
-    def test_returns_n_samples_with_prompt_prefix(self) -> None:
-        # gpt2 vocab so encoder ids are in range; rest tiny for speed
-        model = _tiny_gpt(vocab_size=50257)
-        encoder = tiktoken.get_encoding("gpt2")
-        samples = loop._sample_text(
-            model, encoder,
-            prompt="Hello", n_samples=3, max_length=8,
-            device="cpu", rank=0,
-        )
-        assert len(samples) == 3
-        assert all(isinstance(s, str) for s in samples)
-        assert all(s.startswith("Hello") for s in samples)

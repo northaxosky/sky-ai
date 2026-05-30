@@ -96,6 +96,103 @@ class TestHelp:
         assert "--checkpoint" in result.output
         assert "--prompt" in result.output
 
+    def test_sample_help_mentions_new_flags(self) -> None:
+        result = runner.invoke(app, ["sample", "--help"])
+        assert result.exit_code == 0
+        for flag in ("--num-samples", "--max-new-tokens", "--temperature",
+                     "--top-k", "--seed", "--device"):
+            assert flag in result.output, f"missing {flag} in sample --help"
+
+
+class TestSampleEndToEnd:
+    """Sample against a real (tiny) checkpoint built in-test"""
+
+    def _build_checkpoint(self, tmp_path: Path) -> Path:
+        import yaml
+
+        from skyai.checkpoint import save_checkpoint
+        from skyai.config.loader import load_config
+        from skyai.nn.model import GPT, GPTConfig
+        from skyai.training.optimizer import build_optimizer
+
+        # write a tiny but valid YAML config (vocab matches gpt2 for the CLI's encoder)
+        cfg_dict = {
+            "total_batch_size": 256,
+            "model": {
+                "n_layer": 2, "n_head": 2, "n_embed": 32,
+                "vocab_size": 50257, "block_size": 64,
+                "tokenizer": "gpt2",
+            },
+            "data": {"root": str(tmp_path / "shards"), "batch_size": 4},
+            "optim": {"weight_decay": 0.0},
+            "schedule": {"max_lr": 1e-3, "min_lr": 1e-4,
+                         "warmup_steps": 1, "max_steps": 10},
+            "eval": {"interval": 5},
+            "log": {"dir": str(tmp_path / "logs")},
+            "checkpoint": {"dir": str(tmp_path / "ckpts")},
+        }
+        cfg_path = tmp_path / "cfg.yaml"
+        cfg_path.write_text(yaml.safe_dump(cfg_dict))
+        cfg = load_config(cfg_path)
+
+        model = GPT(GPTConfig(
+            n_layer=cfg.model.n_layer, n_head=cfg.model.n_head,
+            n_embed=cfg.model.n_embed, vocab_size=cfg.model.vocab_size,
+            block_size=cfg.model.block_size,
+        ))
+        optim = build_optimizer(model, learning_rate=1e-3, weight_decay=0.0, device_type="cpu")
+
+        class _StubLoader:
+            def state_dict(self) -> dict: return {}
+            def load_state_dict(self, state: dict) -> None: pass
+
+        ckpt_path = save_checkpoint(
+            cfg.checkpoint.dir, step=0,
+            model=model, optimizer=optim, data_loader=_StubLoader(),  # pyright: ignore
+            config=cfg, metrics={"val_loss": 10.0},
+        )
+        assert ckpt_path is not None
+        return ckpt_path
+
+    def test_sample_runs_and_prints_prompt_prefix(self, tmp_path: Path) -> None:
+        ckpt = self._build_checkpoint(tmp_path)
+        result = runner.invoke(app, [
+            "sample", "--checkpoint", str(ckpt),
+            "--prompt", "Hello",
+            "--max-new-tokens", "4",
+            "--device", "cpu",
+            "--seed", "1",
+        ])
+        assert result.exit_code == 0, result.output
+        assert "Hello" in result.output
+
+    def test_sample_with_num_samples_emits_separators(self, tmp_path: Path) -> None:
+        ckpt = self._build_checkpoint(tmp_path)
+        result = runner.invoke(app, [
+            "sample", "--checkpoint", str(ckpt),
+            "--prompt", "Hi",
+            "--num-samples", "3",
+            "--max-new-tokens", "2",
+            "--device", "cpu",
+            "--seed", "1",
+        ])
+        assert result.exit_code == 0, result.output
+        assert "--- sample 1/3 ---" in result.output
+        assert "--- sample 2/3 ---" in result.output
+        assert "--- sample 3/3 ---" in result.output
+
+    def test_sample_top_k_zero_disables_top_k(self, tmp_path: Path) -> None:
+        ckpt = self._build_checkpoint(tmp_path)
+        result = runner.invoke(app, [
+            "sample", "--checkpoint", str(ckpt),
+            "--prompt", "Hi",
+            "--max-new-tokens", "2",
+            "--top-k", "0",
+            "--device", "cpu",
+            "--seed", "1",
+        ])
+        assert result.exit_code == 0, result.output
+
 
 class TestErrors:
     def test_train_missing_config_errors(self) -> None:

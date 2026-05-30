@@ -68,11 +68,38 @@ def evaluate(
     override: Annotated[list[str] | None,
                 typer.Option(help="Override config field, e.g. --override eval.hellaswag=true"),
             ] = None                            
-             ) -> None:
+) -> None:
+    """Run the eval suite on a checkpoint and print per metric results"""
+    import tiktoken
+
+    from skyai.eval import run_evals
+
     cfg = _setup_run(config, override or [], log_name="eval.log")
     bundle = load_checkpoint(checkpoint)
-    logger.info(f"eval: check step={bundle.step}, hellaswag={cfg.eval.hellaswag}")
-    raise NotImplementedError("Not yet implemented")
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    mc = bundle.config.model
+    model = GPT(GPTConfig(
+        n_layer=mc.n_layer, n_head=mc.n_head, n_embed=mc.n_embed,
+        vocab_size=mc.vocab_size, block_size=mc.block_size
+    ))
+    model.load_state_dict(bundle.model_state)
+    model.to(device).eval()
+
+    dtype_map = {
+        "float32": torch.float32,
+        "bfloat16": torch.bfloat16,
+        "float16": torch.float16
+    }
+    dtype = dtype_map[cfg.dtype]
+    enc = tiktoken.get_encoding("gpt2")
+
+    logger.info(f"eval: ckpt step={bundle.step}, {device=}, {cfg.dtype=}, evals={cfg.eval.evals}")
+    results = run_evals(cfg.eval.evals, model, encoder=enc, device=device, rank=0, world_size=1, dtype=dtype) # pyright: ignore
+
+    for name, result in results.items():
+        for metric, value in result.metrics.items():
+            typer.echo(f"{name}/{metric}: {value:.4f} (n={result.num_examples})")
 
 @app.command()
 def sample(

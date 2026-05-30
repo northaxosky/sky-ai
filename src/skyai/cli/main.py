@@ -94,7 +94,7 @@ def evaluate(
         "float16": torch.float16
     }
     dtype = dtype_map[cfg.dtype]
-    enc = tiktoken.get_encoding("gpt2")
+    enc = tiktoken.get_encoding(bundle.config.model.tokenizer)
 
     logger.info(f"eval: ckpt step={bundle.step}, {device=}, {cfg.dtype=}, evals={cfg.eval.evals}")
     results = run_evals(cfg.eval.evals, model, encoder=enc, device=device, rank=0, world_size=1, dtype=dtype) # pyright: ignore
@@ -127,7 +127,7 @@ def sample(
     model.load_state_dict(bundle.model_state)
     model.to(device).eval()
 
-    enc = tiktoken.get_encoding("gpt2")
+    enc = tiktoken.get_encoding(bundle.config.model.tokenizer)
     prompt_ids = torch.tensor([enc.encode(prompt)], dtype=torch.long, device=device)
 
     rng: torch.Generator | None = None

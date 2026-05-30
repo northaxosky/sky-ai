@@ -276,7 +276,7 @@ def train(cfg: RunConfig, *, resume: bool = False) -> None:
         cfg.log, rank=dist_info.rank, resume_id=wandb_run_id,
         config=cfg.model_dump(mode="json"),
     )
-    encoder = tiktoken.get_encoding("gpt2")
+    encoder = tiktoken.get_encoding(cfg.model.tokenizer)
     last_val_loss: float | None = None
 
     if dist_info.is_master:
@@ -319,8 +319,8 @@ def train(cfg: RunConfig, *, resume: bool = False) -> None:
             if step > 0 and (step % cfg.eval.interval == 0 or last_step):
                 samples = _sample_text(
                     raw_model, encoder,
-                    prompt="Hello, I'm a language model,",
-                    n_samples=4, max_length=32,
+                    prompt=cfg.eval.sample_prompt,
+                    n_samples=cfg.eval.sample_n, max_length=cfg.eval.sample_max_length,
                     device=device, rank=dist_info.rank,
                 )
                 if dist_info.is_master:

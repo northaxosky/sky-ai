@@ -36,7 +36,7 @@ schedule:
 eval:
   interval: 250
   val_steps: 20
-  hellaswag: true
+  evals: [hellaswag]
 
 log:
   dir: logs

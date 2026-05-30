@@ -14,6 +14,7 @@ class ModelConfig(BaseModel):
     n_embed: int = Field(gt=0, description="Hidden dim, must be divisible by n_head")
     vocab_size: int = Field(gt=0, description="Tokenizer vocabulary size")
     block_size: int = Field(gt=0, description="Max sequence length / context window")
+    tokenizer: str = Field(default="gpt2", description="tiktoken encoding name; must match the model's vocab")
 
     @model_validator(mode="after")
     def _embed_divisible_by_head(self) -> ModelConfig:
@@ -59,6 +60,12 @@ class EvalConfig(BaseModel):
         default_factory=lambda: ["hellaswag"],
         description="Names of evals to run, order preserved"
     )
+    sample_prompt: str = Field(
+        default="Hello, I'm a language model,",
+        description="Prompt fed to the periodic sampler",
+    )
+    sample_n: int = Field(default=4, gt=0, description="Number of completions per sample step")
+    sample_max_length: int = Field(default=32, gt=0, description="Max total length (prompt + new tokens)")
 
 
 class LogConfig(BaseModel):

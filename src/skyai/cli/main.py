@@ -12,7 +12,7 @@ import typer
 
 from skyai.checkpoint import load_checkpoint
 from skyai.config.loader import load_config
-from skyai.config.schema import RunConfig
+from skyai.config.schema import RunConfig, LogConfig
 from skyai.log import get_logger, setup_logging
 from skyai.nn.model import GPT, GPTConfig
 from skyai.sample import sample as sample_fn
@@ -162,6 +162,26 @@ def doctor(
     """Environment + project sanity checks"""
     from skyai.cli.doctor import run_doctor
     raise typer.Exit(run_doctor(config_path=config))
+
+@app.command()
+def ablate(
+    spec: Annotated[Path, typer.Option(help="Path to ablation YAML spec")],
+    output_dir: Annotated[Path, typer.Option(help="Where per-variant runs and results.{md,json} land")],
+    dry_run: Annotated[bool, typer.Option(help="Print the variant plan, don't train")] = False,
+    force: Annotated[bool, typer.Option(help="Re-run variants even if result.json exists")] = False,
+) -> None:
+    """Sequential parameter sweep: train each variant, write results.{md,json}"""
+    from skyai.ablation import run_ablation
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    setup_logging(
+        LogConfig(dir=output_dir),
+        rank=_rank_from_env(),
+        log_path=output_dir / "ablation.log",
+    )
+    logger.info(f"ablate: {spec=}, {output_dir=}, {dry_run=}, {force=}")
+    run_ablation(spec, output_dir, dry_run=dry_run, force=force)
+
 
 if __name__ == "__main__":
     app()

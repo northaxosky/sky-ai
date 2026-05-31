@@ -23,7 +23,7 @@ class TestDetectNonFiniteGrad:
         y.backward()
         if grad_value is not None:
             # Poison the second layer's bias gradient
-            model[1].bias.grad.fill_(grad_value)
+            model[1].bias.grad.fill_(grad_value) # pyright: ignore
         return model
 
     def test_all_finite_returns_none(self) -> None:

@@ -132,6 +132,14 @@ class LogConfig(BaseModel):
         return self
 
 
+class ProfilingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    log_every: int = Field(default=100, gt=0, description="Emit breakdown every N steps")
+    cuda_sync: bool = Field(default=False, description="Force torch.cuda.synchronize for precise timing (expensive)")
+
+
 class CheckpointConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -157,6 +165,7 @@ class RunConfig(BaseModel):
     schedule: ScheduleConfig
     eval: EvalConfig
     log: LogConfig = LogConfig()
+    profiling: ProfilingConfig = ProfilingConfig()
     checkpoint: CheckpointConfig = CheckpointConfig()
 
     @model_validator(mode="after")

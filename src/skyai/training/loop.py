@@ -24,6 +24,7 @@ from skyai.log import get_logger
 from skyai.nn.model import GPT, GPTConfig
 from skyai.sample import sample
 from skyai.training.optimizer import build_optimizer
+from skyai.training.profiler import Profiler
 from skyai.training.schedule import CosineSchedule
 from skyai.wandb_logger import WandbLogger
 
@@ -191,7 +192,8 @@ def _run_train_step(
         train_loader: DataLoader,
         optimizer: torch.optim.Optimizer,
         schedule: CosineSchedule,
-        dist_info: DistInfo, *,
+        dist_info: DistInfo,
+        profiler: Profiler, *,
         step: int,
         grad_accum_steps: int,
         grad_clip: float,
@@ -212,21 +214,27 @@ def _run_train_step(
         if dist_info.is_ddp:
             forward_model.require_backward_grad_sync = (micro_step == grad_accum_steps - 1) # pyright: ignore
 
-        with torch.autocast(device_type=device_type, dtype=dtype):
-            _, loss = forward_model(x, y)
-        loss = loss / grad_accum_steps
-        loss_accum += loss.detach()
-        loss.backward()
+        with profiler.region("forward"):
+            with torch.autocast(device_type=device_type, dtype=dtype):
+                _, loss = forward_model(x, y)
+            loss = loss / grad_accum_steps
+            loss_accum += loss.detach()
+
+        with profiler.region("backward"):
+            loss.backward()
 
     if dist_info.is_ddp:
         dist.all_reduce(loss_accum, op=dist.ReduceOp.AVG)
 
-    grad_norm = torch.nn.utils.clip_grad_norm_(forward_model.parameters(), grad_clip)
+    with profiler.region("grad_clip"):
+        grad_norm = torch.nn.utils.clip_grad_norm_(forward_model.parameters(), grad_clip)
 
     lr = schedule.lr_for(step)
     for pg in optimizer.param_groups:
         pg["lr"] = lr
-    optimizer.step()
+
+    with profiler.region("optimizer"):
+        optimizer.step()
 
     if device_type =="cuda":
         torch.cuda.synchronize()
@@ -237,7 +245,7 @@ def _run_val_loss(
     forward_model: nn.Module,
     val_loader: DataLoader,
     dist_info: DistInfo,
-    *,
+    profiler: Profiler, *,
     val_steps: int,
     device: str,
     device_type: str,
@@ -250,11 +258,13 @@ def _run_val_loss(
     val_loss_accum = torch.zeros((), device=device)
     with torch.no_grad():
         for _ in range(val_steps):
-            x, y = val_loader.next_batch()
-            x, y = x.to(device), y.to(device)
-            with torch.autocast(device_type=device_type, dtype=dtype):
-                _, loss = forward_model(x, y)
-            val_loss_accum += loss.detach() / val_steps
+            with profiler.region("val_data"):
+                x, y = val_loader.next_batch()
+                x, y = x.to(device), y.to(device)
+            with profiler.region("val_forward"):
+                with torch.autocast(device_type=device_type, dtype=dtype):
+                    _, loss = forward_model(x, y)
+                val_loss_accum += loss.detach() / val_steps
 
     if dist_info.is_ddp:
         dist.all_reduce(val_loss_accum, op=dist.ReduceOp.AVG)
@@ -312,6 +322,7 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
     last_val_loss: float | None = None
     last_samples: list[str] | None = None
     step_losses: list[float] = []
+    profiler = Profiler(cfg.profiling, device=device, rank=dist_info.rank)
 
     if dist_info.is_master:
         logger.info(
@@ -327,18 +338,20 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
 
             # ---- Periodic eval (val loss + eval suite); dt below includes this time ----
             if step % cfg.eval.interval == 0 or last_step:
-                val_loss = _run_val_loss(
-                    forward_model, val_loader, dist_info,
-                    val_steps=cfg.eval.val_steps, device=device,
-                    device_type=device_type, dtype=dtype,
-                )
+                with profiler.region("eval_val_loss"):
+                    val_loss = _run_val_loss(
+                        forward_model, val_loader, dist_info, profiler,
+                        val_steps=cfg.eval.val_steps, device=device,
+                        device_type=device_type, dtype=dtype,
+                    )
                 last_val_loss = val_loss
 
-                eval_results = run_evals(
-                    cfg.eval.evals, raw_model, # pyright: ignore
-                    encoder=encoder, device=device,
-                    rank=dist_info.rank, world_size=dist_info.world_size, dtype=dtype,
-                )
+                with profiler.region("eval_suite"):
+                    eval_results = run_evals(
+                        cfg.eval.evals, raw_model, # pyright: ignore
+                        encoder=encoder, device=device,
+                        rank=dist_info.rank, world_size=dist_info.world_size, dtype=dtype,
+                    )
 
                 if dist_info.is_master:
                     logger.info(f"step {step}: val_loss={val_loss:.4f}")
@@ -351,14 +364,15 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
 
             # ---- Periodic sampling (skip step 0: untrained model produces noise) ----
             if step > 0 and (step % cfg.eval.interval == 0 or last_step):
-                rng = torch.Generator(device=device).manual_seed(42 + dist_info.rank)
-                samples = sample(
-                    raw_model, encoder, cfg.eval.sample_prompt,
-                    n_samples=cfg.eval.sample_n,
-                    max_length=cfg.eval.sample_max_length,
-                    device=device,
-                    generator=rng,
-                )
+                with profiler.region("sample"):
+                    rng = torch.Generator(device=device).manual_seed(42 + dist_info.rank)
+                    samples = sample(
+                        raw_model, encoder, cfg.eval.sample_prompt,
+                        n_samples=cfg.eval.sample_n,
+                        max_length=cfg.eval.sample_max_length,
+                        device=device,
+                        generator=rng,
+                    )
                 if dist_info.is_master:
                     last_samples = samples
                     for i, s in enumerate(samples):
@@ -366,7 +380,7 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
 
             # ---- Training step ----
             loss, grad_norm, lr = _run_train_step(
-                forward_model, train_loader, optimizer, schedule, dist_info,
+                forward_model, train_loader, optimizer, schedule, dist_info, profiler,
                 step=step, grad_accum_steps=grad_accum_steps,
                 grad_clip=cfg.grad_clip, device=device,
                 device_type=device_type, dtype=dtype,
@@ -390,26 +404,31 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
 
             # ---- Periodic checkpoint (after training step is complete) ----
             if step > 0 and (step % cfg.checkpoint.every_n_steps == 0 or last_step):
-                metrics_for_ckpt: dict[str, float] = {"train/loss": loss}
-                if last_val_loss is not None:
-                    metrics_for_ckpt["val_loss"] = last_val_loss
-                save_checkpoint(
-                    cfg.checkpoint.dir, step,
-                    model=raw_model, optimizer=optimizer,
-                    data_loader=train_loader, config=cfg,
-                    metrics=metrics_for_ckpt,
-                    wandb_run_id=wb.run_id,
-                    rank=dist_info.rank,
-                    keep_last_n=cfg.checkpoint.keep_last_n,
-                    best_metric=cfg.checkpoint.best_metric,
-                    best_direction=cfg.checkpoint.best_direction,
-                )
+                with profiler.region("checkpoint"):
+                    metrics_for_ckpt: dict[str, float] = {"train/loss": loss}
+                    if last_val_loss is not None:
+                        metrics_for_ckpt["val_loss"] = last_val_loss
+                    save_checkpoint(
+                        cfg.checkpoint.dir, step,
+                        model=raw_model, optimizer=optimizer,
+                        data_loader=train_loader, config=cfg,
+                        metrics=metrics_for_ckpt,
+                        wandb_run_id=wb.run_id,
+                        rank=dist_info.rank,
+                        keep_last_n=cfg.checkpoint.keep_last_n,
+                        best_metric=cfg.checkpoint.best_metric,
+                        best_direction=cfg.checkpoint.best_direction,
+                    )
+            if profiler.should_log(step):
+                wb.log_metrics(profiler.log_and_reset(step), step=step)
+        
         if dist_info.is_master:
             metrics = _build_metrics(raw_model, step_losses, last_val_loss, last_samples)
         else:
             metrics = None
 
     finally:
+        profiler.flush(step if 'step' in locals() else 0)
         wb.finish()
         if dist_info.is_ddp:
             destroy_process_group()

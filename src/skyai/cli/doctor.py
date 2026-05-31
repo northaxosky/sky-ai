@@ -97,8 +97,8 @@ def _check_ddp_env() -> CheckResult:
         return ("FAIL", f"DDP vars non-integer or missing: {vars_} ({e})")
     if rank >= world or local_rank >= world:
         return ("FAIL", f"DDP vars inconsistent: RANK={rank} LOCAL_RANK={local_rank} WORLD_SIZE={world}")
-    # NCCL rendezvous needs MASTER_ADDR + MASTER_PORT; missing values will
-    # hang at init rather than fail loudly.
+    
+    # missing values will hang at init rather than fail loudly.
     if world > 1:
         master_addr = os.environ.get("MASTER_ADDR")
         master_port = os.environ.get("MASTER_PORT")

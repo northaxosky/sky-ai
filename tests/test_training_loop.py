@@ -15,15 +15,22 @@ from skyai.config.schema import (
     LogConfig,
     ModelConfig,
     OptimConfig,
+    ProfilingConfig,
     RunConfig,
     ScheduleConfig,
 )
 from skyai.nn.model import GPT, GPTConfig
 from skyai.training import loop
 from skyai.training.optimizer import build_optimizer
+from skyai.training.profiler import Profiler
 from skyai.training.schedule import CosineSchedule
 
 # ---- helpers --------------------------------------------------------------
+
+def _noop_profiler() -> Profiler:
+    """Disabled profiler so call sites can pass the new positional arg without timing anything."""
+    return Profiler(ProfilingConfig(enabled=False), device="cpu", rank=0)
+
 
 def _tiny_gpt(vocab_size: int = 50304) -> GPT:
     return GPT(GPTConfig(
@@ -267,7 +274,7 @@ class TestRunTrainStep:
         dist_info = loop.DistInfo(rank=0, local_rank=0, world_size=1)
 
         loss, grad_norm, lr = loop._run_train_step(
-            model, loader, optim, sched, dist_info,  # pyright: ignore
+            model, loader, optim, sched, dist_info, _noop_profiler(),  # pyright: ignore
             step=0, grad_accum_steps=2, grad_clip=1.0,
             device="cpu", device_type="cpu", dtype=torch.float32,
         )
@@ -283,18 +290,18 @@ class TestRunTrainStep:
         dist_info = loop.DistInfo(rank=0, local_rank=0, world_size=1)
 
         loss0, *_ = loop._run_train_step(
-            model, loader, optim, sched, dist_info,  # pyright: ignore
+            model, loader, optim, sched, dist_info, _noop_profiler(),  # pyright: ignore
             step=0, grad_accum_steps=1, grad_clip=1.0,
             device="cpu", device_type="cpu", dtype=torch.float32,
         )
         for step in range(1, 15):
             loop._run_train_step(
-                model, loader, optim, sched, dist_info,  # pyright: ignore
+                model, loader, optim, sched, dist_info, _noop_profiler(),  # pyright: ignore
                 step=step, grad_accum_steps=1, grad_clip=1.0,
                 device="cpu", device_type="cpu", dtype=torch.float32,
             )
         loss_after, *_ = loop._run_train_step(
-            model, loader, optim, sched, dist_info,  # pyright: ignore
+            model, loader, optim, sched, dist_info, _noop_profiler(),  # pyright: ignore
             step=15, grad_accum_steps=1, grad_clip=1.0,
             device="cpu", device_type="cpu", dtype=torch.float32,
         )
@@ -307,7 +314,7 @@ class TestRunValLoss:
         loader = _BatchLoader(vocab_size=128, batch_size=2, block_size=8)
         dist_info = loop.DistInfo(rank=0, local_rank=0, world_size=1)
         loss = loop._run_val_loss(
-            model, loader, dist_info,  # pyright: ignore
+            model, loader, dist_info, _noop_profiler(),  # pyright: ignore
             val_steps=3, device="cpu", device_type="cpu", dtype=torch.float32,
         )
         assert torch.isfinite(torch.tensor(loss))
@@ -319,7 +326,7 @@ class TestRunValLoss:
         loader = _BatchLoader(vocab_size=128, batch_size=2, block_size=8)
         dist_info = loop.DistInfo(rank=0, local_rank=0, world_size=1)
         loop._run_val_loss(
-            model, loader, dist_info,  # pyright: ignore
+            model, loader, dist_info, _noop_profiler(),  # pyright: ignore
             val_steps=1, device="cpu", device_type="cpu", dtype=torch.float32,
         )
         assert model.training is False

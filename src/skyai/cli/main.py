@@ -12,7 +12,7 @@ import typer
 
 from skyai.checkpoint import load_checkpoint
 from skyai.config.loader import load_config
-from skyai.config.schema import RunConfig, LogConfig
+from skyai.config.schema import LogConfig, RunConfig
 from skyai.log import get_logger, setup_logging
 from skyai.nn.model import GPT, GPTConfig
 from skyai.sample import sample as sample_fn

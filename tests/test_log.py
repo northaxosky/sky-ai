@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from pathlib import Path
 from typing import Literal
@@ -21,12 +22,9 @@ def _reset_root_logger():
     root.handlers.clear()
     yield
 
-    # Close any handlers the test installed
     for handler in list(root.handlers):
-        try:
+        with contextlib.suppress(Exception):
             handler.close()
-        except Exception:
-            pass
     root.handlers.clear()
     root.handlers.extend(saved_handlers)
     root.setLevel(saved_level)

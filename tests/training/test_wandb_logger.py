@@ -102,7 +102,9 @@ class TestEnabled:
 
     def test_finish_is_idempotent(self, mock_wandb: MagicMock) -> None:
         wb = WandbLogger(cfg=_enabled_cfg(), rank=0)
-        wb.finish(); wb.finish(); wb.finish()
+        wb.finish()
+        wb.finish()
+        wb.finish()
         mock_wandb.finish.assert_called_once()
 
 

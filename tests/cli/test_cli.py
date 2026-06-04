@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
@@ -21,14 +22,12 @@ def _reset_root_logger():
     root = logging.getLogger()
     saved_handlers = list(root.handlers)
     saved_level = root.level
-    root.handlers.clear
+    root.handlers.clear()
     yield
 
     for handler in list(root.handlers):
-        try:
+        with contextlib.suppress(Exception):
             handler.close()
-        except Exception:
-            pass
     root.handlers.clear()
     root.handlers.extend(saved_handlers)
     root.setLevel(saved_level)

@@ -4,24 +4,29 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
-from skyai.nn.layers import ResidualProjection
+from skyai.nn.layers import Linear, ResidualProjection
 
 
 class MLP(nn.Module):
-    """Position wise feed forward: project up, GELU, project down"""
+    """SwiGLU position wise feed forward"""
 
-    def __init__(self, n_embed: int, hidden_multiple: int = 4) -> None:
+    def __init__(self, n_embed: int, hidden_multiple: int = 4, align: int = 256) -> None:
         super().__init__()
-        hidden = hidden_multiple * n_embed
-        self.c_fc = nn.Linear(n_embed, hidden)
-        self.gelu = nn.GELU(approximate='tanh')
-        self.c_proj = ResidualProjection(hidden, n_embed)
+
+        # 8/3 scaling keeps params equal to hidden_multiple x GELU MLP
+        hidden = int(2 * hidden_multiple * n_embed / 3)
+
+        # Round up to multiple of align for hardware friendly shape
+        hidden = ((hidden + align - 1) // align) * align
+
+        self.gate_proj = Linear(n_embed, hidden, bias=False)
+        self.up_proj = Linear(n_embed, hidden, bias=False)
+        self.down_proj = ResidualProjection(hidden, n_embed, bias=False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.c_fc(x)
-        x = self.gelu(x)
-        x = self.c_proj(x)
-
-        return x
+        gate = F.silu(self.gate_proj(x))
+        up = self.up_proj(x)
+        return self.down_proj(gate * up)
     

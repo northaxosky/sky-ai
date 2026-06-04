@@ -1,46 +1,65 @@
-"""Causal self-attention used by every GPT layer"""
+"""Causal self-attention with RoPE, GQA, QK-Norm"""
 
 from __future__ import annotations
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
-from skyai.nn.layers import ResidualProjection
+from skyai.nn.flash import attention
+from skyai.nn.layers import Linear, ResidualProjection, RMSNorm
+
+
+def apply_rotary_emb(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
+    """Apply RoPE to the last dim of x"""
+    half = x.size(-1) // 2
+    x1 = x[..., :half]
+    x2 = x[..., half:]
+    y1 = x1 * cos + x2 * sin
+    y2 = -x1 * sin + x2 * cos
+    out = torch.cat([y1, y2], dim=-1)
+    return out.to(x.dtype)
 
 
 class CausalSelfAttention(nn.Module):
     """Multi=head causal self-attention with fused QKV prjection"""
 
-    def __init__(self, n_embed: int, n_head: int) -> None:
+    def __init__(self, n_embed: int, n_head: int, n_kv_head: int | None = None, use_qk_norm: bool = True, qk_sharpen: float = 1.2) -> None:
         super().__init__()
         if n_embed % n_head != 0:
             raise ValueError(f'n_embed ({n_embed}) must be divisible by n_head ({n_head})')
+
+        n_kv_head = n_kv_head if n_kv_head is not None else n_head
+        if n_kv_head > n_head:
+            raise ValueError(f"n_kv_head ({n_kv_head}) must be <= n_head ({n_head})")
+        if n_head % n_kv_head != 0:
+            raise ValueError(f"n_head ({n_head}) must be divisible by n_kv_head ({n_kv_head})")
         
         self.n_head = n_head
-        self.n_embed = n_embed
-        self.head_size = n_embed // n_head
+        self.n_kv_head = n_kv_head
+        self.head_dim = n_embed // n_head
+        self.qk_sharpen = qk_sharpen
 
-        # Fused projection: one matmul produces Q, K, V concatenated
-        self.c_attn = nn.Linear(n_embed, 3 * n_embed)
+        self.c_q = Linear(n_embed, n_head * self.head_dim, bias=False)
+        self.c_k = Linear(n_embed, n_kv_head * self.head_dim, bias=False)
+        self.c_v = Linear(n_embed, n_kv_head * self.head_dim, bias=False)
+        self.c_proj = ResidualProjection(n_embed, n_embed, bias=False)
 
-        # ResidualProjection applies the residual-path scaling
-        self.c_proj = ResidualProjection(n_embed, n_embed)
+        self.q_norm = RMSNorm(self.head_dim) if use_qk_norm else nn.Identity()
+        self.k_norm = RMSNorm(self.head_dim) if use_qk_norm else nn.Identity()
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
         B, T, C = x.size()
 
-        # Fused projection split into Q, K, V (each B, T, C)
-        q, k, v = self.c_attn(x).split(self.n_embed, dim=2)
+        q = self.c_q(x).view(B, T, self.n_head, self.head_dim)
+        k = self.c_k(x).view(B, T, self.n_kv_head, self.head_dim)
+        v = self.c_v(x).view(B, T, self.n_kv_head, self.head_dim)
 
-        # Reshape to (B, n_head, T, head_size) so attension sees the head dim
-        q = q.view(B, T, self.n_head, self.head_size).transpose(1, 2)
-        k = k.view(B, T, self.n_head, self.head_size).transpose(1, 2)
-        v = v.view(B, T, self.n_head, self.head_size).transpose(1, 2)
+        q = apply_rotary_emb(q, cos, sin)
+        k = apply_rotary_emb(k, cos, sin)
 
-        # Flash attentions path
-        y = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+        q = self.q_norm(q) * self.qk_sharpen
+        k = self.k_norm(k) * self.qk_sharpen
 
-        # Back to (B, T, C) before output
-        y = y.transpose(1, 2).contiguous().view(B, T, C)
+        y = attention(q, k, v, is_causal=True)
+        y = y.contiguous().view(B, T, -1)
         return self.c_proj(y)

@@ -34,6 +34,10 @@ def generate(model: nn.Module, prompt_ids: torch.Tensor, *,
             logits, _ = model(context)
             logits = logits[:, -1, :] / temperature
 
+            vocab_size = getattr(getattr(model, "config", None), "vocab_size", None)
+            if vocab_size is not None and logits.size(-1) > vocab_size:
+                logits[:, vocab_size:] = float("-inf")
+
             if top_k is not None:
                 logits = _apply_top_k(logits, top_k)
             probs = F.softmax(logits, dim=-1)

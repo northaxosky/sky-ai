@@ -1,4 +1,4 @@
-"""GPT-2 model definition"""
+"""GPT language model with modern architecture"""
 
 from __future__ import annotations
 
@@ -9,8 +9,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from skyai.nn.block import Block
-from skyai.nn.init import init_gpt2_weights
+from skyai.nn.init import init_weights
+from skyai.nn.layers import Linear, RMSNorm
 
+
+def _pad_to_multiple(n: int, multiple: int) -> int:
+    return ((n + multiple - 1) // multiple) * multiple
 
 @dataclass
 class GPTConfig:
@@ -18,8 +22,21 @@ class GPTConfig:
     vocab_size: int = 50257
     n_layer: int = 12
     n_head: int = 12
+    n_kv_head: int | None = None
     n_embed: int = 768
     hidden_multiple: int = 4
+    rope_theta: float = 100_000.0
+    vocab_pad_multiple: int = 128
+    tie_weights: bool = False
+    logit_softcap: float | None = 15.0
+
+    @property
+    def vocab_size_padded(self) -> int:
+        return _pad_to_multiple(self.vocab_size, self.vocab_pad_multiple)
+
+    @property
+    def head_dim(self) -> int:
+        return self.n_embed // self.n_head
 
 
 class _Transformer(nn.Module):
@@ -27,32 +44,48 @@ class _Transformer(nn.Module):
 
     def __init__(self, config: GPTConfig) -> None:
         super().__init__()
-        self.wte = nn.Embedding(config.vocab_size, config.n_embed)
-        self.wpe = nn.Embedding(config.block_size, config.n_embed)
+        self.wte = nn.Embedding(config.vocab_size_padded, config.n_embed)
         self.h = nn.ModuleList([
             Block(
                 n_embed=config.n_embed,
                 n_head=config.n_head,
+                n_kv_head=config.n_kv_head,
                 hidden_multiple=config.hidden_multiple,
             )
             for _ in range(config.n_layer)
         ])
-        self.ln_f = nn.LayerNorm(config.n_embed)
+        self.ln_f = RMSNorm(config.n_embed)
 
 
 class GPT(nn.Module):
     """GPT-2 Language Model"""
+    cos: torch.Tensor
+    sin: torch.Tensor
 
     def __init__(self, config: GPTConfig) -> None:
         super().__init__()
         self.config = config
         self.transformer = _Transformer(config)
-        self.lm_head = nn.Linear(config.n_embed, config.vocab_size, bias=False)
+        self.lm_head = Linear(config.n_embed, config.vocab_size_padded, bias=False)
 
-        # Weight tying: token embedding shares weights with output projection
-        self.transformer.wte.weight = self.lm_head.weight
+        if config.tie_weights:
+            # Weight tying: token embedding shares weights with output projection
+            self.transformer.wte.weight = self.lm_head.weight
 
-        self.apply(lambda m: init_gpt2_weights(m, n_layer=config.n_layer))
+        cos, sin = self._build_rotary_tables()
+        self.register_buffer("cos", cos, persistent=False)
+        self.register_buffer("sin", sin, persistent=False)
+
+        self.apply(lambda m: init_weights(m, n_layer=config.n_layer))
+
+    def _build_rotary_tables(self) -> tuple[torch.Tensor, torch.Tensor]:
+        head_dim = self.config.head_dim
+        inv_freq = 1.0 / (self.config.rope_theta ** (torch.arange(0, head_dim, 2).float() / head_dim))
+        pos = torch.arange(self.config.block_size).float()
+        angles = torch.outer(pos, inv_freq)
+        cos = angles.cos()[None, :, None, :]
+        sin = angles.sin()[None, :, None, :]
+        return cos, sin
 
     def forward(self, idx: torch.Tensor, targets: torch.Tensor | None = None
                 ) -> tuple[torch.Tensor, torch.Tensor | None]:
@@ -60,14 +93,19 @@ class GPT(nn.Module):
         if self.config.block_size < T:
             raise ValueError(f'Sequence length {T} exceeds block_size {self.config.block_size}')
         
-        pos = torch.arange(0, T, dtype=torch.long, device=idx.device)
-        x = self.transformer.wte(idx) + self.transformer.wpe(pos)
+        cos = self.cos[:, :T]
+        sin = self.sin[:, :T]
 
+        x = self.transformer.wte(idx)
         for block in self.transformer.h:
-            x = block(x)
+            x = block(x, cos, sin)
 
         x = self.transformer.ln_f(x)
         logits = self.lm_head(x)
+
+        if self.config.logit_softcap is not None:
+            cap = self.config.logit_softcap
+            logits = cap * torch.tanh(logits.float() / cap)
 
         loss = None
         if targets is not None:
@@ -76,61 +114,4 @@ class GPT(nn.Module):
                 targets.view(-1),
             )
         return logits, loss
-    
-    @classmethod
-    def from_pretrained(cls, model_type: str) -> GPT:
-        """Load Hugging Face GPT-2 checkpoint weights into a SkyAI GPT"""
-        variants: dict[str, GPTConfig] = {
-            "gpt2":        GPTConfig(n_layer=12, n_head=12, n_embed=768),   # 124M
-            "gpt2-medium": GPTConfig(n_layer=24, n_head=16, n_embed=1024),  # 350M
-            "gpt2-large":  GPTConfig(n_layer=36, n_head=20, n_embed=1280),  # 774M
-            "gpt2-xl":     GPTConfig(n_layer=48, n_head=25, n_embed=1600),  # 1558M
-        }
-        if model_type not in variants:
-            raise ValueError(f"Unknown model type {model_type!r}: expected one of {list(variants)}")
-
-        from transformers import GPT2LMHeadModel
-
-        model = cls(variants[model_type])
-
-        hf_sd = GPT2LMHeadModel.from_pretrained(model_type).state_dict()
-        our_sd = model.state_dict()
-
-        hf_keys = [
-            k for k in hf_sd
-            if not k.endswith((".attn.bias", ".attn.masked_bias"))
-        ]
-
-        transposed_suffixes = (
-            "attn.c_attn.weight",
-            "attn.c_proj.weight",
-            "mlp.c_fc.weight",
-            "mlp.c_proj.weight",
-        )
-
-        if len(hf_keys) != len(our_sd):
-            raise RuntimeError(
-                f"state dict size mismatch after filtering: "
-                f"HF has {len(hf_keys)}, SkyAI has {len(our_sd)}"
-            )
-        
-        with torch.no_grad():
-            for key in hf_keys:
-                src, dst = hf_sd[key], our_sd[key]
-                if key.endswith(transposed_suffixes):
-                    if src.shape[::-1] != dst.shape:
-                        raise RuntimeError(
-                            f"Transposed shape mismatch fro {key}: "
-                            f"HF {tuple(src.shape)} vs SkyAi {tuple(dst.shape)}"
-                        )
-                    dst.copy_(src.t())
-                else:
-                    if src.shape != dst.shape:
-                        raise RuntimeError(
-                            f"Shape mismatch for {key}: "
-                            f"HF {tuple(src.shape)} vs SkyAI {tuple(dst.shape)}"
-                        )
-                    dst.copy_(src)
-
-        return model
 

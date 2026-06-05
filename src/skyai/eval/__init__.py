@@ -16,20 +16,25 @@ EVALS: dict[str, EvalFn] = {
 }
 
 
-def run_evals(names: list[str], model: nn.Module, *, 
-              encoder: tiktoken.Encoding, 
-              device: str | torch.device,
-              rank: int,
-              world_size: int,
-              dtype: torch.dtype = torch.bfloat16,
+def run_evals(
+    names: list[str],
+    model: nn.Module,
+    *,
+    encoder: tiktoken.Encoding,
+    device: str | torch.device,
+    rank: int,
+    world_size: int,
+    dtype: torch.dtype = torch.bfloat16,
 ) -> dict[str, EvalResult]:
     """Run a sequence of evals by name, preserve input order"""
     results: dict[str, EvalResult] = {}
     for name in names:
         if name not in EVALS:
             raise KeyError(f"Unknown eval {name!r}. Available: {sorted(EVALS.keys())}")
-        
+
         fn = EVALS[name]
-        results[name] = fn(model, encoder=encoder, device=device, rank=rank, world_size=world_size, dtype=dtype)
+        results[name] = fn(
+            model, encoder=encoder, device=device, rank=rank, world_size=world_size, dtype=dtype
+        )
 
     return results

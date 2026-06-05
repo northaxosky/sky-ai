@@ -8,8 +8,7 @@ from skyai.nn.layers import ResidualProjection
 
 
 def init_weights(module: nn.Module, n_layer: int) -> None:
-    """initialize a single module in place. designed for model.apply()
-    """
+    """initialize a single module in place. designed for model.apply()"""
     if isinstance(module, ResidualProjection):
         std = 0.02 * (2 * n_layer) ** -0.5
         nn.init.normal_(module.weight, mean=0.0, std=std)

@@ -15,7 +15,7 @@ class RMSNorm(nn.Module):
         self.dim = dim
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return F.rms_norm(x, (self.dim, ))
+        return F.rms_norm(x, (self.dim,))
 
 
 class Linear(nn.Linear):
@@ -29,4 +29,3 @@ class Linear(nn.Linear):
 
 class ResidualProjection(Linear):
     """Marker subclass for output projections that feed the residual stream"""
-    

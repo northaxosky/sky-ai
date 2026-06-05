@@ -55,8 +55,12 @@ class TestRunEvals:
         monkeypatch.setitem(EVALS, "hellaswag", fn)
 
         results = run_evals(
-            ["hellaswag"], stub_model,
-            encoder=encoder, device="cpu", rank=0, world_size=1,
+            ["hellaswag"],
+            stub_model,
+            encoder=encoder,
+            device="cpu",
+            rank=0,
+            world_size=1,
         )
         assert "hellaswag" in results
         assert results["hellaswag"].name == "hellaswag"
@@ -70,8 +74,12 @@ class TestRunEvals:
         monkeypatch.setitem(EVALS, "lambada", fn_l)
 
         results = run_evals(
-            ["lambada", "hellaswag"], stub_model,
-            encoder=encoder, device="cpu", rank=0, world_size=1,
+            ["lambada", "hellaswag"],
+            stub_model,
+            encoder=encoder,
+            device="cpu",
+            rank=0,
+            world_size=1,
         )
         assert list(results.keys()) == ["lambada", "hellaswag"]
 
@@ -80,16 +88,24 @@ class TestRunEvals:
     ) -> None:
         with pytest.raises(KeyError, match="Unknown eval"):
             run_evals(
-                ["nonexistent"], stub_model,
-                encoder=encoder, device="cpu", rank=0, world_size=1,
+                ["nonexistent"],
+                stub_model,
+                encoder=encoder,
+                device="cpu",
+                rank=0,
+                world_size=1,
             )
 
     def test_empty_list_returns_empty_dict(
         self, encoder: tiktoken.Encoding, stub_model: nn.Module
     ) -> None:
         results = run_evals(
-            [], stub_model,
-            encoder=encoder, device="cpu", rank=0, world_size=1,
+            [],
+            stub_model,
+            encoder=encoder,
+            device="cpu",
+            rank=0,
+            world_size=1,
         )
         assert results == {}
 
@@ -100,8 +116,12 @@ class TestRunEvals:
         monkeypatch.setitem(EVALS, "hellaswag", fn)
 
         run_evals(
-            ["hellaswag"], stub_model,
-            encoder=encoder, device="cuda:3", rank=2, world_size=4,
+            ["hellaswag"],
+            stub_model,
+            encoder=encoder,
+            device="cuda:3",
+            rank=2,
+            world_size=4,
             dtype=torch.float16,
         )
         assert record["model"] is stub_model

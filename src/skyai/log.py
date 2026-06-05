@@ -21,13 +21,13 @@ class _RankFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.rank = self._rank
-        return True # Dont drop, only annotate
-    
+        return True  # Dont drop, only annotate
+
 
 def setup_logging(cfg: LogConfig, rank: int = 0, log_path: Path | None = None) -> None:
     """Configure the root logger for a SkyAI process"""
     root = logging.getLogger()
-    root.setLevel(logging.DEBUG) # pass everything, let handler do filtering
+    root.setLevel(logging.DEBUG)  # pass everything, let handler do filtering
 
     for handler in list(root.handlers):
         if getattr(handler, "_skyai", False):
@@ -41,18 +41,18 @@ def setup_logging(cfg: LogConfig, rank: int = 0, log_path: Path | None = None) -
     console.setLevel(cfg.level if rank == 0 else "WARNING")
     console.setFormatter(formatter)
     console.addFilter(rank_filter)
-    console._skyai = True # pyright: ignore
+    console._skyai = True  # pyright: ignore
     root.addHandler(console)
 
     if rank == 0:
         cfg.dir.mkdir(parents=True, exist_ok=True)
         path = log_path if log_path is not None else cfg.dir / "run.log"
-        
+
         file_handler = logging.FileHandler(path, mode="a", encoding="utf-8")
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(formatter)
         file_handler.addFilter(rank_filter)
-        file_handler._skyai = True # pyright: ignore
+        file_handler._skyai = True  # pyright: ignore
         root.addHandler(file_handler)
 
 

@@ -47,6 +47,7 @@ logger = get_logger(__name__)
 @dataclass(frozen=True)
 class DistInfo:
     """Distributed runtime info"""
+
     rank: int
     local_rank: int
     world_size: int
@@ -54,34 +55,36 @@ class DistInfo:
     @property
     def is_ddp(self) -> bool:
         return self.world_size > 1
-    
+
     @property
     def is_master(self) -> bool:
         return self.rank == 0
-    
+
 
 def _init_distributed() -> DistInfo:
     """Detect torchrun env, init process group when WORLD_SIZE > 1"""
     if "RANK" not in os.environ:
         return DistInfo(rank=0, local_rank=0, world_size=1)
-    
+
     rank = int(os.environ["RANK"])
     local_rank = int(os.environ["LOCAL_RANK"])
     world_size = int(os.environ["WORLD_SIZE"])
     if not torch.cuda.is_available():
         raise RuntimeError("DDP requested (RANK is set) but CUDA is not available")
-    
+
     init_process_group(backend="nccl")
     torch.cuda.set_device(local_rank)
     logger.info(f"DDP initialized: {rank=}, {local_rank=}, {world_size=}")
 
     return DistInfo(rank=rank, local_rank=local_rank, world_size=world_size)
 
+
 def _resolve_device(local_rank: int) -> str:
     """cuda:LOCAL_RANK when cuda is avail, else cpu"""
     if torch.cuda.is_available():
         return f"cuda:{local_rank}"
     return "cpu"
+
 
 def _compute_grad_accum(cfg: RunConfig, world_size: int) -> int:
     """Validate total_batch_size divides cleanly into (B * T * world_size), return accum count"""
@@ -93,6 +96,7 @@ def _compute_grad_accum(cfg: RunConfig, world_size: int) -> int:
         )
     return cfg.total_batch_size // tokens_per_step
 
+
 def _set_seeds(seed: int) -> None:
     """Seed python, numpy, torch cpu and Cuda"""
     random.seed(seed)
@@ -101,11 +105,21 @@ def _set_seeds(seed: int) -> None:
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
+
 def _build_model(cfg: RunConfig, device: str, dist_info: DistInfo) -> tuple[nn.Module, GPT]:
     """Build GPT, move to device, optionally compile + DDP"""
     gpt_cfg = GPTConfig(
-        n_layer=cfg.model.n_layer, n_head=cfg.model.n_head, n_embed=cfg.model.n_embed,
-        vocab_size=cfg.model.vocab_size, block_size=cfg.model.block_size,
+        n_layer=cfg.model.n_layer,
+        n_head=cfg.model.n_head,
+        n_kv_head=cfg.model.n_kv_head,
+        n_embed=cfg.model.n_embed,
+        hidden_multiple=cfg.model.hidden_multiple,
+        vocab_size=cfg.model.vocab_size,
+        vocab_pad_multiple=cfg.model.vocab_pad_multiple,
+        block_size=cfg.model.block_size,
+        rope_theta=cfg.model.rope_theta,
+        tie_weights=cfg.model.tie_weights,
+        logit_softcap=cfg.model.logit_softcap,
     )
     raw_model = GPT(gpt_cfg)
     raw_model.to(device)
@@ -117,7 +131,9 @@ def _build_model(cfg: RunConfig, device: str, dist_info: DistInfo) -> tuple[nn.M
         forward_model = DDP(forward_model, device_ids=[dist_info.local_rank])
     return forward_model, raw_model
 
-def _build_components(cfg: RunConfig, dist_info: DistInfo, device: str
+
+def _build_components(
+    cfg: RunConfig, dist_info: DistInfo, device: str
 ) -> tuple[nn.Module, GPT, torch.optim.Optimizer, CosineSchedule, DataLoader, DataLoader, int]:
     """Build forward model, raw model, optimizer, schedule, train and val loader, grad_accum_steps"""
     grad_accum_steps = _compute_grad_accum(cfg, dist_info.world_size)
@@ -125,30 +141,51 @@ def _build_components(cfg: RunConfig, dist_info: DistInfo, device: str
 
     device_type = "cuda" if device.startswith("cuda") else "cpu"
     optimizer = build_optimizer(
-        raw_model, learning_rate=cfg.schedule.max_lr, weight_decay=cfg.optim.weight_decay,
-        betas=cfg.optim.betas, eps=cfg.optim.eps, device_type=device_type,
+        raw_model,
+        learning_rate=cfg.schedule.max_lr,
+        weight_decay=cfg.optim.weight_decay,
+        betas=cfg.optim.betas,
+        eps=cfg.optim.eps,
+        device_type=device_type,
     )
     schedule = CosineSchedule(
-        max_lr=cfg.schedule.max_lr, min_lr=cfg.schedule.min_lr,
-        warmup_steps=cfg.schedule.warmup_steps, max_steps=cfg.schedule.max_steps
+        max_lr=cfg.schedule.max_lr,
+        min_lr=cfg.schedule.min_lr,
+        warmup_steps=cfg.schedule.warmup_steps,
+        max_steps=cfg.schedule.max_steps,
     )
     train_loader = DataLoader(
-        data_root=cfg.data.root, split=cfg.data.train_split, batch_size=cfg.data.batch_size,
-        block_size=cfg.model.block_size, rank=dist_info.rank, world_size=dist_info.world_size,
+        data_root=cfg.data.root,
+        split=cfg.data.train_split,
+        batch_size=cfg.data.batch_size,
+        block_size=cfg.model.block_size,
+        rank=dist_info.rank,
+        world_size=dist_info.world_size,
     )
     val_loader = DataLoader(
-        data_root=cfg.data.root, split=cfg.data.val_split, batch_size=cfg.data.batch_size,
-        block_size=cfg.model.block_size, rank=dist_info.rank, world_size=dist_info.world_size
+        data_root=cfg.data.root,
+        split=cfg.data.val_split,
+        batch_size=cfg.data.batch_size,
+        block_size=cfg.model.block_size,
+        rank=dist_info.rank,
+        world_size=dist_info.world_size,
     )
     return forward_model, raw_model, optimizer, schedule, train_loader, val_loader, grad_accum_steps
+
 
 _RESUME_CRITICAL_FIELDS: list[tuple[str, Any]] = [
     ("total_batch_size", lambda c: c.total_batch_size),
     ("model.n_layer", lambda c: c.model.n_layer),
     ("model.n_head", lambda c: c.model.n_head),
+    ("model.n_kv_head", lambda c: c.model.n_kv_head),
     ("model.n_embed", lambda c: c.model.n_embed),
+    ("model.hidden_multiple", lambda c: c.model.hidden_multiple),
     ("model.vocab_size", lambda c: c.model.vocab_size),
+    ("model.vocab_pad_multiple", lambda c: c.model.vocab_pad_multiple),
     ("model.block_size", lambda c: c.model.block_size),
+    ("model.rope_theta", lambda c: c.model.rope_theta),
+    ("model.tie_weights", lambda c: c.model.tie_weights),
+    ("model.logit_softcap", lambda c: c.model.logit_softcap),
     ("model.tokenizer", lambda c: c.model.tokenizer),
     ("data.batch_size", lambda c: c.data.batch_size),
 ]
@@ -175,8 +212,9 @@ def _assert_resume_compatible(current: RunConfig, saved: RunConfig) -> None:
         )
 
 
-def _maybe_resume(cfg: RunConfig, raw_model: GPT, optimizer: torch.optim.Optimizer, train_loader: DataLoader
-                  ) -> tuple[int, str | None]:
+def _maybe_resume(
+    cfg: RunConfig, raw_model: GPT, optimizer: torch.optim.Optimizer, train_loader: DataLoader
+) -> tuple[int, str | None]:
     """Restore from latest potentially"""
     latest = cfg.checkpoint.dir / "latest.json"
     if not latest.is_file():
@@ -194,20 +232,22 @@ def _maybe_resume(cfg: RunConfig, raw_model: GPT, optimizer: torch.optim.Optimiz
     logger.info(f"Resumed from {latest}: ckpt step={bundle.step}, next step={start_step}")
     return start_step, bundle.wandb_run_id
 
+
 def _run_train_step(
-        forward_model: nn.Module,
-        train_loader: DataLoader,
-        optimizer: torch.optim.Optimizer,
-        schedule: CosineSchedule,
-        dist_info: DistInfo,
-        profiler: Profiler, 
-        recovery: RecoveryConfig, *,
-        step: int,
-        grad_accum_steps: int,
-        grad_clip: float,
-        device: str,
-        device_type: str,
-        dtype: torch.dtype,
+    forward_model: nn.Module,
+    train_loader: DataLoader,
+    optimizer: torch.optim.Optimizer,
+    schedule: CosineSchedule,
+    dist_info: DistInfo,
+    profiler: Profiler,
+    recovery: RecoveryConfig,
+    *,
+    step: int,
+    grad_accum_steps: int,
+    grad_clip: float,
+    device: str,
+    device_type: str,
+    dtype: torch.dtype,
 ) -> tuple[float, float, float]:
     """One training step: grad-accum micro batches, all reduce, clip, optimize"""
     forward_model.train()
@@ -221,7 +261,7 @@ def _run_train_step(
 
         # DDP sync skip: only sync grads on the final micro step
         if dist_info.is_ddp:
-            forward_model.require_backward_grad_sync = (micro_step == grad_accum_steps - 1) # pyright: ignore
+            forward_model.require_backward_grad_sync = micro_step == grad_accum_steps - 1  # pyright: ignore
 
         with profiler.region("forward"):
             with torch.autocast(device_type=device_type, dtype=dtype):
@@ -241,13 +281,15 @@ def _run_train_step(
 
     bad_param = detect_non_finite_grad(forward_model)
     if bad_param is not None:
-        msg = (f"Non-finite gradient at step {step} in '{bad_param}."
-               f"loss={float(loss_accum.item()):4.f}, grad_norm={float(grad_norm.item())}")
+        msg = (
+            f"Non-finite gradient at step {step} in '{bad_param}."
+            f"loss={float(loss_accum.item()):4.f}, grad_norm={float(grad_norm.item())}"
+        )
         if recovery.nan_grad_action == "halt":
             raise NonFiniteGradError(msg)
         logger.warning(f"SKIP {msg}")
         optimizer.zero_grad()
-        return float("nan"), float("nan"), schedule.lr_for(step)            
+        return float("nan"), float("nan"), schedule.lr_for(step)
 
     lr = schedule.lr_for(step)
     for pg in optimizer.param_groups:
@@ -256,16 +298,18 @@ def _run_train_step(
     with profiler.region("optimizer"):
         optimizer.step()
 
-    if device_type =="cuda":
+    if device_type == "cuda":
         torch.cuda.synchronize()
 
     return float(loss_accum.item()), float(grad_norm.item()), lr
+
 
 def _run_val_loss(
     forward_model: nn.Module,
     val_loader: DataLoader,
     dist_info: DistInfo,
-    profiler: Profiler, *,
+    profiler: Profiler,
+    *,
     val_steps: int,
     device: str,
     device_type: str,
@@ -290,7 +334,13 @@ def _run_val_loss(
         dist.all_reduce(val_loss_accum, op=dist.ReduceOp.AVG)
     return float(val_loss_accum.item())
 
-def _build_metrics(model: nn.Module, step_losses: list[float], final_val_loss: float | None, sample_text: list[str] | None) -> dict[str, Any]:
+
+def _build_metrics(
+    model: nn.Module,
+    step_losses: list[float],
+    final_val_loss: float | None,
+    sample_text: list[str] | None,
+) -> dict[str, Any]:
     """Bundle the runs quantitative output for golden test comparison"""
     # Stream per-parameter so we don't concatenate every weight into a single
     # multi-GB tensor at 1.5B scale. Cast to float32 for the square reduction
@@ -309,10 +359,11 @@ def _build_metrics(model: nn.Module, step_losses: list[float], final_val_loss: f
         "sample_text": sample_text,
         "param_checksum": {
             "sum": total_sum,
-            "norm": total_sq ** 0.5,
+            "norm": total_sq**0.5,
             "n_params": n_params,
-        }
+        },
     }
+
 
 def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
     """End-to-end training loop, single-process or DDP via torchrun"""
@@ -325,8 +376,13 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
     torch.set_float32_matmul_precision("high")
 
     (
-        forward_model, raw_model, optimizer, schedule,
-        train_loader, val_loader, grad_accum_steps,
+        forward_model,
+        raw_model,
+        optimizer,
+        schedule,
+        train_loader,
+        val_loader,
+        grad_accum_steps,
     ) = _build_components(cfg, dist_info, device)
 
     start_step = 0
@@ -335,7 +391,9 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
         start_step, wandb_run_id = _maybe_resume(cfg, raw_model, optimizer, train_loader)
 
     wb = WandbLogger(
-        cfg.log, rank=dist_info.rank, resume_id=wandb_run_id,
+        cfg.log,
+        rank=dist_info.rank,
+        resume_id=wandb_run_id,
         config=cfg.model_dump(mode="json"),
     )
     encoder = tiktoken.get_encoding(cfg.model.tokenizer)
@@ -360,17 +418,26 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
             if step % cfg.eval.interval == 0 or last_step:
                 with profiler.region("eval_val_loss"):
                     val_loss = _run_val_loss(
-                        forward_model, val_loader, dist_info, profiler,
-                        val_steps=cfg.eval.val_steps, device=device,
-                        device_type=device_type, dtype=dtype,
+                        forward_model,
+                        val_loader,
+                        dist_info,
+                        profiler,
+                        val_steps=cfg.eval.val_steps,
+                        device=device,
+                        device_type=device_type,
+                        dtype=dtype,
                     )
                 last_val_loss = val_loss
 
                 with profiler.region("eval_suite"):
                     eval_results = run_evals(
-                        cfg.eval.evals, raw_model, # pyright: ignore
-                        encoder=encoder, device=device,
-                        rank=dist_info.rank, world_size=dist_info.world_size, dtype=dtype,
+                        cfg.eval.evals,
+                        raw_model,  # pyright: ignore
+                        encoder=encoder,
+                        device=device,
+                        rank=dist_info.rank,
+                        world_size=dist_info.world_size,
+                        dtype=dtype,
                     )
 
                 if dist_info.is_master:
@@ -387,7 +454,9 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
                 with profiler.region("sample"):
                     rng = torch.Generator(device=device).manual_seed(42 + dist_info.rank)
                     samples = sample(
-                        raw_model, encoder, cfg.eval.sample_prompt,
+                        raw_model,
+                        encoder,
+                        cfg.eval.sample_prompt,
                         n_samples=cfg.eval.sample_n,
                         max_length=cfg.eval.sample_max_length,
                         device=device,
@@ -400,10 +469,19 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
 
             # ---- Training step ----
             loss, grad_norm, lr = _run_train_step(
-                forward_model, train_loader, optimizer, schedule, dist_info, profiler, cfg.recovery,
-                step=step, grad_accum_steps=grad_accum_steps,
-                grad_clip=cfg.grad_clip, device=device,
-                device_type=device_type, dtype=dtype,
+                forward_model,
+                train_loader,
+                optimizer,
+                schedule,
+                dist_info,
+                profiler,
+                cfg.recovery,
+                step=step,
+                grad_accum_steps=grad_accum_steps,
+                grad_clip=cfg.grad_clip,
+                device=device,
+                device_type=device_type,
+                dtype=dtype,
             )
 
             dt = time.time() - t0
@@ -414,13 +492,16 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
                         f"step {step}: loss={loss:.6f} lr={lr:.4e} "
                         f"norm={grad_norm:.4f} dt={dt * 1000:.1f}ms tok/s={tokens_per_sec:.0f}"
                     )
-                    wb.log_metrics({
-                        "train/loss": loss,
-                        "train/lr": lr,
-                        "train/grad_norm": grad_norm,
-                        "train/tokens_per_sec": tokens_per_sec,
-                        "train/dt_ms": dt * 1000,
-                    }, step=step)
+                    wb.log_metrics(
+                        {
+                            "train/loss": loss,
+                            "train/lr": lr,
+                            "train/grad_norm": grad_norm,
+                            "train/tokens_per_sec": tokens_per_sec,
+                            "train/dt_ms": dt * 1000,
+                        },
+                        step=step,
+                    )
                     step_losses.append(loss)
                 else:
                     logger.warning(f"step {step}: SKIPPED (non-finite grad)")
@@ -433,9 +514,12 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
                     if last_val_loss is not None:
                         metrics_for_ckpt["val_loss"] = last_val_loss
                     save_checkpoint(
-                        cfg.checkpoint.dir, step,
-                        model=raw_model, optimizer=optimizer,
-                        data_loader=train_loader, config=cfg,
+                        cfg.checkpoint.dir,
+                        step,
+                        model=raw_model,
+                        optimizer=optimizer,
+                        data_loader=train_loader,
+                        config=cfg,
                         metrics=metrics_for_ckpt,
                         wandb_run_id=wb.run_id,
                         rank=dist_info.rank,
@@ -445,7 +529,7 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
                     )
             if profiler.should_log(step):
                 wb.log_metrics(profiler.log_and_reset(step), step=step)
-        
+
         if dist_info.is_master:
             metrics = _build_metrics(raw_model, step_losses, last_val_loss, last_samples)
         else:
@@ -458,9 +542,9 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
         if cfg.recovery.oom_dump_diagnostics:
             diagnose_oom(e, step=current_step, cfg=cfg, world_size=dist_info.world_size)
         raise
-    
+
     finally:
-        profiler.flush(step if 'step' in locals() else 0)
+        profiler.flush(step if "step" in locals() else 0)
         wb.finish()
         if dist_info.is_ddp:
             destroy_process_group()

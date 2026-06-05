@@ -10,13 +10,13 @@ import torch.nn as nn
 
 
 def build_optimizer(
-        model: nn.Module,
-        *,
-        learning_rate: float,
-        weight_decay: float,
-        betas: tuple[float, float] = (0.9, 0.95),
-        eps: float = 1e-8,
-        device_type: str = "cuda",
+    model: nn.Module,
+    *,
+    learning_rate: float,
+    weight_decay: float,
+    betas: tuple[float, float] = (0.9, 0.95),
+    eps: float = 1e-8,
+    device_type: str = "cuda",
 ) -> torch.optim.Optimizer:
     """Build AdamW with GPT-2's parameter group weight decay policy"""
     params = [p for p in model.parameters() if p.requires_grad]

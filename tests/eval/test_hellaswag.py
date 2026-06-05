@@ -17,6 +17,7 @@ from skyai.eval.result import EvalResult
 def encoder() -> tiktoken.Encoding:
     return tiktoken.get_encoding("gpt2")
 
+
 @pytest.fixture
 def example() -> dict[str, Any]:
     """Synthetic hellaswag exampel with 4 completions of deliberately varying length"""
@@ -27,8 +28,8 @@ def example() -> dict[str, Any]:
             "the mat.",
             "the windowsill watching the birds outside.",
             "fire.",
-            "Tuesday in October."
-        ]
+            "Tuesday in October.",
+        ],
     }
 
 
@@ -74,8 +75,8 @@ class TestRenderExample:
         assert tokens.shape == mask.shape
         assert tokens.shape[0] == 4
         assert label == 1
- 
- 
+
+
 class TestComputeCompletionLosses:
     def test_shapes(self) -> None:
         tokens = torch.zeros((4, 6), dtype=torch.long)
@@ -135,8 +136,12 @@ class TestEvaluateHellaswag:
         monkeypatch.setattr(hs, "iterate_examples", lambda split: iter(examples))
         model = _StubModel(vocab_size=encoder.n_vocab, winning_row=0)
         result = hs.evaluate_hellaswag(
-            model, encoder=encoder, device="cpu",
-            rank=0, world_size=1, dtype=torch.float32,
+            model,
+            encoder=encoder,
+            device="cpu",
+            rank=0,
+            world_size=1,
+            dtype=torch.float32,
         )
         assert isinstance(result, EvalResult)
         assert result.name == "hellaswag"
@@ -147,8 +152,7 @@ class TestEvaluateHellaswag:
         self, encoder: tiktoken.Encoding, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         examples = [
-            {"ctx": f"ex {i}", "label": 0, "endings": ["a", "b", "c", "d"]}
-            for i in range(6)
+            {"ctx": f"ex {i}", "label": 0, "endings": ["a", "b", "c", "d"]} for i in range(6)
         ]
         monkeypatch.setattr(hs, "iterate_examples", lambda split: iter(examples))
         # No process group exists; make all_reduce a no-op so we can read per-rank counts
@@ -156,12 +160,20 @@ class TestEvaluateHellaswag:
 
         model = _StubModel(vocab_size=encoder.n_vocab, winning_row=0)
         r0 = hs.evaluate_hellaswag(
-            model, encoder=encoder, device="cpu",
-            rank=0, world_size=2, dtype=torch.float32,
+            model,
+            encoder=encoder,
+            device="cpu",
+            rank=0,
+            world_size=2,
+            dtype=torch.float32,
         )
         r1 = hs.evaluate_hellaswag(
-            model, encoder=encoder, device="cpu",
-            rank=1, world_size=2, dtype=torch.float32,
+            model,
+            encoder=encoder,
+            device="cpu",
+            rank=1,
+            world_size=2,
+            dtype=torch.float32,
         )
         # Indices 0,2,4 rank 0 (3 examples); indices 1,3,5 rank 1 (3 examples)
         assert r0.num_examples == 3

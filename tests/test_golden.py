@@ -1,4 +1,5 @@
 """Golden fixture short run test"""
+
 from __future__ import annotations
 
 import json
@@ -53,18 +54,27 @@ def _golden_cfg(tmp_path: Path) -> RunConfig:
         grad_clip=1.0,
         total_batch_size=64,
         model=ModelConfig(
-            n_layer=2, n_head=2, n_embed=16,
-            vocab_size=vocab_size, block_size=16,
+            n_layer=2,
+            n_head=2,
+            n_embed=16,
+            vocab_size=vocab_size,
+            block_size=16,
         ),
         data=DataConfig(root=data_root, batch_size=2),
         optim=OptimConfig(weight_decay=0.0),
         schedule=ScheduleConfig(
-            max_lr=3e-3, min_lr=1e-4,
-            warmup_steps=1, max_steps=50,
+            max_lr=3e-3,
+            min_lr=1e-4,
+            warmup_steps=1,
+            max_steps=50,
         ),
         eval=EvalConfig(
-            interval=10, val_steps=1, evals=[],
-            sample_prompt="Hello", sample_n=2, sample_max_length=12,
+            interval=10,
+            val_steps=1,
+            evals=[],
+            sample_prompt="Hello",
+            sample_n=2,
+            sample_max_length=12,
         ),
         log=LogConfig(dir=tmp_path / "logs"),
         checkpoint=CheckpointConfig(
@@ -89,15 +99,14 @@ def _compare_metrics(actual: dict, expected: dict, atol: float = 1e-5) -> None:
         f"{len(actual['step_losses'])} vs {len(expected['step_losses'])}"
     )
     for i, (a, e) in enumerate(zip(actual["step_losses"], expected["step_losses"], strict=True)):
-        assert a == pytest.approx(e, abs=atol), (
-            f"step {i} loss: {a} != {e} (atol={atol})"
-        )
+        assert a == pytest.approx(e, abs=atol), f"step {i} loss: {a} != {e} (atol={atol})"
 
     if expected["final_val_loss"] is None:
         assert actual["final_val_loss"] is None
     else:
         assert actual["final_val_loss"] == pytest.approx(
-            expected["final_val_loss"], abs=atol,
+            expected["final_val_loss"],
+            abs=atol,
         ), f"final_val_loss: {actual['final_val_loss']} != {expected['final_val_loss']}"
 
     assert actual["sample_text"] == expected["sample_text"], (
@@ -107,12 +116,8 @@ def _compare_metrics(actual: dict, expected: dict, atol: float = 1e-5) -> None:
     )
 
     ac, ec = actual["param_checksum"], expected["param_checksum"]
-    assert ac["n_params"] == ec["n_params"], (
-        f"n_params: {ac['n_params']} != {ec['n_params']}"
-    )
-    assert ac["sum"] == pytest.approx(ec["sum"], abs=1e-3), (
-        f"param sum: {ac['sum']} != {ec['sum']}"
-    )
+    assert ac["n_params"] == ec["n_params"], f"n_params: {ac['n_params']} != {ec['n_params']}"
+    assert ac["sum"] == pytest.approx(ec["sum"], abs=1e-3), f"param sum: {ac['sum']} != {ec['sum']}"
     assert ac["norm"] == pytest.approx(ec["norm"], abs=1e-3), (
         f"param norm: {ac['norm']} != {ec['norm']}"
     )
@@ -139,9 +144,7 @@ def test_regenerate_golden_fixture(tmp_path: Path) -> None:
     payload = {
         "_meta": {
             "generated_by": "tests/test_golden.py::test_regenerate_golden_fixture",
-            "note": (
-                "Regenerate with: REGENERATE_GOLDEN=1 uv run pytest tests/test_golden.py"
-            ),
+            "note": ("Regenerate with: REGENERATE_GOLDEN=1 uv run pytest tests/test_golden.py"),
         },
         **metrics,
     }

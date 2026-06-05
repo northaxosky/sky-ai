@@ -42,9 +42,10 @@ def sample(
 
     max_new_tokens = max(1, max_length - x.size(1))
     out = generate(
-        model, x,
+        model,
+        x,
         max_new_tokens=max_new_tokens,
-        max_context_len=max_context_len, # pyright: ignore
+        max_context_len=max_context_len,  # pyright: ignore
         temperature=temperature,
         top_k=top_k,
         generator=generator,

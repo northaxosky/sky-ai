@@ -32,31 +32,32 @@ def _reset_root_logger():
     root.handlers.extend(saved_handlers)
     root.setLevel(saved_level)
 
+
 def _minimal_yaml(tmp_path: Path) -> Path:
     """Write a minimal but valid RunCOnfig YAML and return its path"""
     cfg = {
         "total_batch_size": 64,
-            "model": {
-                "n_layer": 2,
-                "n_head": 4,
-                "n_embed": 64,
-                "vocab_size": 100,
-                "block_size": 16,
-            },
-            "data": {
-                "root": str(tmp_path / "shards"),
-                "batch_size": 2,
-            },
-            "optim": {"weight_decay": 0.1},
-            "schedule": {
-                "max_lr": 1e-3,
-                "min_lr": 1e-4,
-                "warmup_steps": 10,
-                "max_steps": 100,
-            },
-            "eval": {"interval": 50},
-            "log": {"dir": str(tmp_path / "logs")},
-            "checkpoint": {"dir": str(tmp_path / "ckpts")},
+        "model": {
+            "n_layer": 2,
+            "n_head": 4,
+            "n_embed": 64,
+            "vocab_size": 100,
+            "block_size": 16,
+        },
+        "data": {
+            "root": str(tmp_path / "shards"),
+            "batch_size": 2,
+        },
+        "optim": {"weight_decay": 0.1},
+        "schedule": {
+            "max_lr": 1e-3,
+            "min_lr": 1e-4,
+            "warmup_steps": 10,
+            "max_steps": 100,
+        },
+        "eval": {"interval": 50},
+        "log": {"dir": str(tmp_path / "logs")},
+        "checkpoint": {"dir": str(tmp_path / "ckpts")},
     }
     path = tmp_path / "cfg.yaml"
     path.write_text(yaml.safe_dump(cfg))
@@ -75,7 +76,7 @@ class TestHelp:
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
         for name in ("version", "train", "eval", "sample", "doctor"):
-            assert name in result.output    
+            assert name in result.output
 
     def test_train_help_mentions_config_and_resume(self) -> None:
         result = runner.invoke(app, ["train", "--help"])
@@ -98,8 +99,14 @@ class TestHelp:
     def test_sample_help_mentions_new_flags(self) -> None:
         result = runner.invoke(app, ["sample", "--help"])
         assert result.exit_code == 0
-        for flag in ("--num-samples", "--max-new-tokens", "--temperature",
-                     "--top-k", "--seed", "--device"):
+        for flag in (
+            "--num-samples",
+            "--max-new-tokens",
+            "--temperature",
+            "--top-k",
+            "--seed",
+            "--device",
+        ):
             assert flag in result.output, f"missing {flag} in sample --help"
 
 
@@ -118,14 +125,16 @@ class TestSampleEndToEnd:
         cfg_dict = {
             "total_batch_size": 256,
             "model": {
-                "n_layer": 2, "n_head": 2, "n_embed": 32,
-                "vocab_size": 50257, "block_size": 64,
+                "n_layer": 2,
+                "n_head": 2,
+                "n_embed": 32,
+                "vocab_size": 50257,
+                "block_size": 64,
                 "tokenizer": "gpt2",
             },
             "data": {"root": str(tmp_path / "shards"), "batch_size": 4},
             "optim": {"weight_decay": 0.0},
-            "schedule": {"max_lr": 1e-3, "min_lr": 1e-4,
-                         "warmup_steps": 1, "max_steps": 10},
+            "schedule": {"max_lr": 1e-3, "min_lr": 1e-4, "warmup_steps": 1, "max_steps": 10},
             "eval": {"interval": 5},
             "log": {"dir": str(tmp_path / "logs")},
             "checkpoint": {"dir": str(tmp_path / "ckpts")},
@@ -134,47 +143,77 @@ class TestSampleEndToEnd:
         cfg_path.write_text(yaml.safe_dump(cfg_dict))
         cfg = load_config(cfg_path)
 
-        model = GPT(GPTConfig(
-            n_layer=cfg.model.n_layer, n_head=cfg.model.n_head,
-            n_embed=cfg.model.n_embed, vocab_size=cfg.model.vocab_size,
-            block_size=cfg.model.block_size,
-        ))
+        model = GPT(
+            GPTConfig(
+                n_layer=cfg.model.n_layer,
+                n_head=cfg.model.n_head,
+                n_embed=cfg.model.n_embed,
+                vocab_size=cfg.model.vocab_size,
+                block_size=cfg.model.block_size,
+            )
+        )
         optim = build_optimizer(model, learning_rate=1e-3, weight_decay=0.0, device_type="cpu")
 
         class _StubLoader:
-            def state_dict(self) -> dict: return {}
-            def load_state_dict(self, state: dict) -> None: pass
+            def state_dict(self) -> dict:
+                return {}
+
+            def load_state_dict(self, state: dict) -> None:
+                pass
 
         ckpt_path = save_checkpoint(
-            cfg.checkpoint.dir, step=0,
-            model=model, optimizer=optim, data_loader=_StubLoader(),  # pyright: ignore
-            config=cfg, metrics={"val_loss": 10.0},
+            cfg.checkpoint.dir,
+            step=0,
+            model=model,
+            optimizer=optim,
+            data_loader=_StubLoader(),  # pyright: ignore
+            config=cfg,
+            metrics={"val_loss": 10.0},
         )
         assert ckpt_path is not None
         return ckpt_path
 
     def test_sample_runs_and_prints_prompt_prefix(self, tmp_path: Path) -> None:
         ckpt = self._build_checkpoint(tmp_path)
-        result = runner.invoke(app, [
-            "sample", "--checkpoint", str(ckpt),
-            "--prompt", "Hello",
-            "--max-new-tokens", "4",
-            "--device", "cpu",
-            "--seed", "1",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "sample",
+                "--checkpoint",
+                str(ckpt),
+                "--prompt",
+                "Hello",
+                "--max-new-tokens",
+                "4",
+                "--device",
+                "cpu",
+                "--seed",
+                "1",
+            ],
+        )
         assert result.exit_code == 0, result.output
         assert "Hello" in result.output
 
     def test_sample_with_num_samples_emits_separators(self, tmp_path: Path) -> None:
         ckpt = self._build_checkpoint(tmp_path)
-        result = runner.invoke(app, [
-            "sample", "--checkpoint", str(ckpt),
-            "--prompt", "Hi",
-            "--num-samples", "3",
-            "--max-new-tokens", "2",
-            "--device", "cpu",
-            "--seed", "1",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "sample",
+                "--checkpoint",
+                str(ckpt),
+                "--prompt",
+                "Hi",
+                "--num-samples",
+                "3",
+                "--max-new-tokens",
+                "2",
+                "--device",
+                "cpu",
+                "--seed",
+                "1",
+            ],
+        )
         assert result.exit_code == 0, result.output
         assert "--- sample 1/3 ---" in result.output
         assert "--- sample 2/3 ---" in result.output
@@ -182,14 +221,24 @@ class TestSampleEndToEnd:
 
     def test_sample_top_k_zero_disables_top_k(self, tmp_path: Path) -> None:
         ckpt = self._build_checkpoint(tmp_path)
-        result = runner.invoke(app, [
-            "sample", "--checkpoint", str(ckpt),
-            "--prompt", "Hi",
-            "--max-new-tokens", "2",
-            "--top-k", "0",
-            "--device", "cpu",
-            "--seed", "1",
-        ])
+        result = runner.invoke(
+            app,
+            [
+                "sample",
+                "--checkpoint",
+                str(ckpt),
+                "--prompt",
+                "Hi",
+                "--max-new-tokens",
+                "2",
+                "--top-k",
+                "0",
+                "--device",
+                "cpu",
+                "--seed",
+                "1",
+            ],
+        )
         assert result.exit_code == 0, result.output
 
 
@@ -200,7 +249,9 @@ class TestErrors:
 
     def test_eval_missing_checkpoint_errors(self, tmp_path: Path) -> None:
         cfg = _minimal_yaml(tmp_path)
-        result = runner.invoke(app, ["eval", "--config", str(cfg), "--checkpoint", str(tmp_path / "missing.pt")])
+        result = runner.invoke(
+            app, ["eval", "--config", str(cfg), "--checkpoint", str(tmp_path / "missing.pt")]
+        )
         assert result.exit_code != 0
 
     def test_train_nonexistent_config_errors(self, tmp_path: Path) -> None:

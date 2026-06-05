@@ -21,17 +21,24 @@ logger = get_logger(__name__)
 
 class AblationSpec(BaseModel):
     """YAML spec for a sweep"""
+
     model_config = ConfigDict(extra="forbid")
     base_config: Path = Field(description="Path to base run YAML, relative to the spec file")
-    base_overrides: dict[str, Any] = Field(default_factory=dict, description="Dot-keyed overrides applied to every variant")
-    sweep: dict[str, list[Any]] = Field(description="Dot keyed sweep dimensions, cartesian product over every list") # pyright: ignore
+    base_overrides: dict[str, Any] = Field(
+        default_factory=dict, description="Dot-keyed overrides applied to every variant"
+    )
+    sweep: dict[str, list[Any]] = Field(
+        description="Dot keyed sweep dimensions, cartesian product over every list"
+    )  # pyright: ignore
 
     @model_validator(mode="after")
     def _scalars_only(self) -> AblationSpec:
         for key, value in self.base_overrides.items():
             if isinstance(value, (dict, list)):
-                raise ValueError(f"base_overrides['{key}'] must be a scalar, use dot-keys like 'schedule.max_steps'")
-            
+                raise ValueError(
+                    f"base_overrides['{key}'] must be a scalar, use dot-keys like 'schedule.max_steps'"
+                )
+
         if not self.sweep:
             raise ValueError("sweep must contain at least one key")
         for key, values in self.sweep.items():
@@ -39,9 +46,12 @@ class AblationSpec(BaseModel):
                 raise ValueError(f"sweep['{key}'] must have at least one value")
             for v in values:
                 if isinstance(v, (dict, list)):
-                    raise ValueError(f"sweep['{key}'] values must be scalars, got {type(v).__name__}")
+                    raise ValueError(
+                        f"sweep['{key}'] values must be scalars, got {type(v).__name__}"
+                    )
         return self
-    
+
+
 def load_ablation_spec(path: Path) -> tuple[AblationSpec, Path]:
     """Parse YAML, return the validated spec and teh absolute base_config path"""
     path = Path(path)
@@ -51,17 +61,20 @@ def load_ablation_spec(path: Path) -> tuple[AblationSpec, Path]:
         data = yaml.safe_load(f) or {}
     if not isinstance(data, dict):
         raise ValueError(f"{path} must contain a YAML mapping at the top level")
-    
+
     spec = AblationSpec.model_validate(data)
     base_abs = (path.parent / spec.base_config).resolve()
     if not base_abs.exists():
-        raise FileNotFoundError(f"base_config '{spec.base_config}' (resolved to {base_abs}) does not exist")
+        raise FileNotFoundError(
+            f"base_config '{spec.base_config}' (resolved to {base_abs}) does not exist"
+        )
     return spec, base_abs
 
 
 @dataclass(frozen=True)
 class Variant:
     """One point in the cartesian product of the sweep"""
+
     slug: str
     overrides: dict[str, Any]
 
@@ -74,6 +87,7 @@ def _format_value(value: Any) -> str:
         return str(value).replace(".", "p")
     return str(value).replace(".", "p").replace("/", "_").replace(" ", "_")
 
+
 def _slug_for_overrides(overrides: dict[str, Any]) -> str:
     """Stable, file name safe slug summarising"""
     parts = []
@@ -81,6 +95,7 @@ def _slug_for_overrides(overrides: dict[str, Any]) -> str:
         flat_key = key.replace(".", "_")
         parts.append(f"{flat_key}_{_format_value(value)}")
     return "__".join(parts) if parts else "default"
+
 
 def generate_variants(spec: AblationSpec) -> list[Variant]:
     """Cartesian product over sweep keys"""
@@ -91,6 +106,7 @@ def generate_variants(spec: AblationSpec) -> list[Variant]:
         overrides = dict(zip(keys, combo, strict=True))
         variants.append(Variant(slug=_slug_for_overrides(overrides), overrides=overrides))
     return variants
+
 
 def _overrides_to_strings(overrides: dict[str, Any]) -> list[str]:
     """flat dict -> list of key val pair"""

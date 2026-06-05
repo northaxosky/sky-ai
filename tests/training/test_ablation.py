@@ -123,7 +123,8 @@ class TestAblationSpec:
     def test_nested_base_override_fails(self, tmp_path: Path) -> None:
         base = _write_base_config(tmp_path)
         spec_path = _write_spec(
-            tmp_path, base,
+            tmp_path,
+            base,
             base_overrides={"schedule": {"max_steps": 1000}},
             sweep={"optim.weight_decay": [0.0]},
         )
@@ -131,8 +132,9 @@ class TestAblationSpec:
             load_ablation_spec(spec_path)
 
     def test_nonexistent_base_config_fails(self, tmp_path: Path) -> None:
-        spec_path = _write_spec(tmp_path, tmp_path / "does_not_exist.yaml",
-                                sweep={"optim.weight_decay": [0.0]})
+        spec_path = _write_spec(
+            tmp_path, tmp_path / "does_not_exist.yaml", sweep={"optim.weight_decay": [0.0]}
+        )
         with pytest.raises(FileNotFoundError):
             load_ablation_spec(spec_path)
 
@@ -173,10 +175,12 @@ class TestGenerateVariants:
 class TestMarkdownTable:
     def test_renders_ok_and_failed(self) -> None:
         results = [
-            VariantResult(slug="a", overrides={"x": 1}, status="ok",
-                        final_val_loss=3.5, wall_seconds=12.5),
-            VariantResult(slug="b", overrides={"x": 2}, status="failed",
-                        wall_seconds=1.0, error="boom"),
+            VariantResult(
+                slug="a", overrides={"x": 1}, status="ok", final_val_loss=3.5, wall_seconds=12.5
+            ),
+            VariantResult(
+                slug="b", overrides={"x": 2}, status="failed", wall_seconds=1.0, error="boom"
+            ),
         ]
         md = _format_markdown_table(results)
         assert "| a | ok | 3.5000 | 12.5 | x=1 |" in md
@@ -201,8 +205,9 @@ class TestRunAblation:
         assert all(r.status == "planned" for r in results)
         assert called == []
 
-    def test_runs_each_variant_and_aggregates(self, tmp_path: Path,
-                                            monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_runs_each_variant_and_aggregates(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         base = _write_base_config(tmp_path)
         spec_path = _write_spec(tmp_path, base, sweep={"optim.weight_decay": [0.0, 0.1]})
 
@@ -227,8 +232,9 @@ class TestRunAblation:
         assert (out / "optim_weight_decay_0p0" / "result.json").exists()
         assert (out / "optim_weight_decay_0p1" / "result.json").exists()
 
-    def test_failed_variant_does_not_abort_sweep(self, tmp_path: Path,
-                                                monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_failed_variant_does_not_abort_sweep(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         base = _write_base_config(tmp_path)
         spec_path = _write_spec(tmp_path, base, sweep={"optim.weight_decay": [0.0, 0.1, 0.2]})
 
@@ -244,23 +250,28 @@ class TestRunAblation:
         assert statuses == ["ok", "failed", "ok"]
         assert "simulated NaN halt" in results[1].error  # pyright: ignore
 
-    def test_skip_when_result_exists(self, tmp_path: Path,
-                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_skip_when_result_exists(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         base = _write_base_config(tmp_path)
         spec_path = _write_spec(tmp_path, base, sweep={"optim.weight_decay": [0.0, 0.1]})
 
         # Pre-populate one variant's result as ok
         existing_dir = tmp_path / "out" / "optim_weight_decay_0p0"
         existing_dir.mkdir(parents=True)
-        existing = VariantResult(slug="optim_weight_decay_0p0",
-                                overrides={"optim.weight_decay": 0.0},
-                                status="ok", final_val_loss=2.5, wall_seconds=1.0)
+        existing = VariantResult(
+            slug="optim_weight_decay_0p0",
+            overrides={"optim.weight_decay": 0.0},
+            status="ok",
+            final_val_loss=2.5,
+            wall_seconds=1.0,
+        )
         (existing_dir / "result.json").write_text(json.dumps(existing.__dict__))
 
         train_calls: list[float] = []
+
         def fake_train(cfg, resume=False):
             train_calls.append(cfg.optim.weight_decay)
             return {"final_val_loss": 3.0}
+
         monkeypatch.setattr("skyai.training.loop.train", fake_train)
 
         results = run_ablation(spec_path, tmp_path / "out")
@@ -269,43 +280,53 @@ class TestRunAblation:
         assert results[0].status == "skipped"
         assert results[1].status == "ok"
 
-    def test_force_reruns_existing(self, tmp_path: Path,
-                                monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_force_reruns_existing(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         base = _write_base_config(tmp_path)
         spec_path = _write_spec(tmp_path, base, sweep={"optim.weight_decay": [0.0]})
 
         existing_dir = tmp_path / "out" / "optim_weight_decay_0p0"
         existing_dir.mkdir(parents=True)
-        (existing_dir / "result.json").write_text(json.dumps(
-            VariantResult(slug="optim_weight_decay_0p0",
-                        overrides={"optim.weight_decay": 0.0},
-                        status="ok", final_val_loss=99.9).__dict__
-        ))
+        (existing_dir / "result.json").write_text(
+            json.dumps(
+                VariantResult(
+                    slug="optim_weight_decay_0p0",
+                    overrides={"optim.weight_decay": 0.0},
+                    status="ok",
+                    final_val_loss=99.9,
+                ).__dict__
+            )
+        )
 
         train_calls: list[float] = []
+
         def fake_train(cfg, resume=False):
             train_calls.append(cfg.optim.weight_decay)
             return {"final_val_loss": 1.0}
+
         monkeypatch.setattr("skyai.training.loop.train", fake_train)
 
         results = run_ablation(spec_path, tmp_path / "out", force=True)
         assert train_calls == [0.0]
         assert results[0].final_val_loss == pytest.approx(1.0)
 
-    def test_overrides_threaded_into_per_variant_cfg(self, tmp_path: Path,
-                                                    monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_overrides_threaded_into_per_variant_cfg(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """base_overrides + variant overrides + checkpoint.dir all reach the loaded cfg."""
         base = _write_base_config(tmp_path)
         spec_path = _write_spec(
-            tmp_path, base,
+            tmp_path,
+            base,
             base_overrides={"schedule.max_steps": 8},
             sweep={"optim.weight_decay": [0.0]},
         )
 
         seen_cfg: list[Any] = []
+
         def fake_train(cfg, resume=False):
             seen_cfg.append(cfg)
             return {"final_val_loss": 1.0}
+
         monkeypatch.setattr("skyai.training.loop.train", fake_train)
 
         out = tmp_path / "out"

@@ -11,8 +11,9 @@ from skyai.nn.mlp import MLP
 
 
 class Block(nn.Module):
-
-    def __init__(self, n_embed: int, n_head: int, n_kv_head: int | None = None, hidden_multiple: int = 4) -> None:
+    def __init__(
+        self, n_embed: int, n_head: int, n_kv_head: int | None = None, hidden_multiple: int = 4
+    ) -> None:
         super().__init__()
         self.ln_1 = RMSNorm(n_embed)
         self.attn = CausalSelfAttention(n_embed=n_embed, n_head=n_head, n_kv_head=n_kv_head)

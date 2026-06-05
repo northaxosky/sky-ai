@@ -23,17 +23,24 @@ def apply_rotary_emb(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> t
 class CausalSelfAttention(nn.Module):
     """Multi=head causal self-attention with fused QKV prjection"""
 
-    def __init__(self, n_embed: int, n_head: int, n_kv_head: int | None = None, use_qk_norm: bool = True, qk_sharpen: float = 1.2) -> None:
+    def __init__(
+        self,
+        n_embed: int,
+        n_head: int,
+        n_kv_head: int | None = None,
+        use_qk_norm: bool = True,
+        qk_sharpen: float = 1.2,
+    ) -> None:
         super().__init__()
         if n_embed % n_head != 0:
-            raise ValueError(f'n_embed ({n_embed}) must be divisible by n_head ({n_head})')
+            raise ValueError(f"n_embed ({n_embed}) must be divisible by n_head ({n_head})")
 
         n_kv_head = n_kv_head if n_kv_head is not None else n_head
         if n_kv_head > n_head:
             raise ValueError(f"n_kv_head ({n_kv_head}) must be <= n_head ({n_head})")
         if n_head % n_kv_head != 0:
             raise ValueError(f"n_head ({n_head}) must be divisible by n_kv_head ({n_kv_head})")
-        
+
         self.n_head = n_head
         self.n_kv_head = n_kv_head
         self.head_dim = n_embed // n_head

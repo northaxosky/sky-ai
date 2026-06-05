@@ -13,6 +13,7 @@ from skyai.config.schema import RunConfig
 
 # ---------- shared fixtures ----------
 
+
 def _valid_run_dict() -> dict:
     """Minimal valid RunConfig dict. Tests mutate and re-validate."""
     return {
@@ -22,19 +23,28 @@ def _valid_run_dict() -> dict:
         "grad_clip": 1.0,
         "total_batch_size": 256,
         "model": {
-            "n_layer": 2, "n_head": 2, "n_embed": 64,
-            "vocab_size": 50257, "block_size": 64,
+            "n_layer": 2,
+            "n_head": 2,
+            "n_embed": 64,
+            "vocab_size": 50257,
+            "block_size": 64,
         },
         "data": {
-            "root": "data/x", "train_split": "train", "val_split": "val",
+            "root": "data/x",
+            "train_split": "train",
+            "val_split": "val",
             "batch_size": 4,
         },
         "optim": {
-            "weight_decay": 0.1, "betas": [0.9, 0.95], "eps": 1.0e-8,
+            "weight_decay": 0.1,
+            "betas": [0.9, 0.95],
+            "eps": 1.0e-8,
         },
         "schedule": {
-            "max_lr": 1.0e-3, "min_lr": 1.0e-4,
-            "warmup_steps": 5, "max_steps": 50,
+            "max_lr": 1.0e-3,
+            "min_lr": 1.0e-4,
+            "warmup_steps": 5,
+            "max_steps": 50,
         },
         "eval": {"interval": 10, "val_steps": 2, "evals": ["hellaswag"]},
         "log": {"dir": "logs", "level": "INFO", "wandb": False, "wandb_project": None},
@@ -93,11 +103,49 @@ def _write_yaml(tmp_path: Path, name: str, body: str) -> Path:
 
 # ---------- TestSchema: pydantic validators ----------
 
+
 class TestSchema:
     def test_minimal_valid(self) -> None:
         cfg = RunConfig.model_validate(_valid_run_dict())
         assert cfg.model.n_embed == 64
         assert cfg.optim.betas == (0.9, 0.95)
+
+    def test_model_defaults_include_modern_arch_fields(self) -> None:
+        cfg = RunConfig.model_validate(_valid_run_dict())
+        assert cfg.model.n_kv_head is None
+        assert cfg.model.hidden_multiple == 4
+        assert cfg.model.rope_theta == 100_000.0
+        assert cfg.model.vocab_pad_multiple == 128
+        assert cfg.model.tie_weights is False
+        assert cfg.model.logit_softcap == 15.0
+
+    def test_model_modern_arch_fields_accepted(self) -> None:
+        d = _valid_run_dict()
+        d["model"].update(
+            {
+                "n_kv_head": 1,
+                "hidden_multiple": 8,
+                "rope_theta": 10_000.0,
+                "vocab_pad_multiple": 256,
+                "tie_weights": True,
+                "logit_softcap": None,
+            }
+        )
+        cfg = RunConfig.model_validate(d)
+        assert cfg.model.n_kv_head == 1
+        assert cfg.model.hidden_multiple == 8
+        assert cfg.model.rope_theta == 10_000.0
+        assert cfg.model.vocab_pad_multiple == 256
+        assert cfg.model.tie_weights is True
+        assert cfg.model.logit_softcap is None
+
+    def test_n_kv_head_must_divide_n_head(self) -> None:
+        d = _valid_run_dict()
+        d["model"]["n_head"] = 6
+        d["model"]["n_embed"] = 60
+        d["model"]["n_kv_head"] = 4
+        with pytest.raises(ValidationError, match="n_kv_head"):
+            RunConfig.model_validate(d)
 
     def test_path_coercion(self) -> None:
         cfg = RunConfig.model_validate(_valid_run_dict())
@@ -186,8 +234,22 @@ class TestSchema:
         with pytest.raises(ValidationError, match="tokenizer"):
             RunConfig.model_validate(d)
 
+    def test_vocab_above_alignment_padding_rejected(self) -> None:
+        d = _valid_run_dict()
+        d["model"]["vocab_size"] = 50305  # one above gpt2 pad-to-128
+        with pytest.raises(ValidationError, match="vocab_size"):
+            RunConfig.model_validate(d)
+
+    def test_cl100k_vocab_with_alignment_padding_accepted(self) -> None:
+        d = _valid_run_dict()
+        d["model"]["tokenizer"] = "cl100k_base"
+        d["model"]["vocab_size"] = 100352  # cl100k_base padded to 128
+        cfg = RunConfig.model_validate(d)
+        assert cfg.model.vocab_size == 100352
+
 
 # ---------- TestLoader: YAML reading, extends, deep merge ----------
+
 
 class TestLoader:
     def test_loads_single_file(self, tmp_path: Path) -> None:
@@ -198,39 +260,55 @@ class TestLoader:
 
     def test_extends_merges_parent(self, tmp_path: Path) -> None:
         _write_yaml(tmp_path, "base.yaml", _full_yaml_body())
-        _write_yaml(tmp_path, "child.yaml", """
+        _write_yaml(
+            tmp_path,
+            "child.yaml",
+            """
             extends: base.yaml
             seed: 42
-        """)
+        """,
+        )
         cfg = load_config(tmp_path / "child.yaml")
-        assert cfg.seed == 42          # overridden
+        assert cfg.seed == 42  # overridden
         assert cfg.model.n_layer == 2  # inherited
 
     def test_deep_merge_into_nested_subconfig(self, tmp_path: Path) -> None:
         _write_yaml(tmp_path, "base.yaml", _full_yaml_body())
-        _write_yaml(tmp_path, "child.yaml", """
+        _write_yaml(
+            tmp_path,
+            "child.yaml",
+            """
             extends: base.yaml
             model:
                 n_embed: 128
-        """)
+        """,
+        )
         cfg = load_config(tmp_path / "child.yaml")
         assert cfg.model.n_embed == 128  # overridden
-        assert cfg.model.n_layer == 2    # inherited (deep merge, not replace)
-        assert cfg.model.n_head == 2     # inherited
+        assert cfg.model.n_layer == 2  # inherited (deep merge, not replace)
+        assert cfg.model.n_head == 2  # inherited
 
     def test_extends_chain_three_levels(self, tmp_path: Path) -> None:
         _write_yaml(tmp_path, "a.yaml", _full_yaml_body())
-        _write_yaml(tmp_path, "b.yaml", """
+        _write_yaml(
+            tmp_path,
+            "b.yaml",
+            """
             extends: a.yaml
             seed: 7
-        """)
-        _write_yaml(tmp_path, "c.yaml", """
+        """,
+        )
+        _write_yaml(
+            tmp_path,
+            "c.yaml",
+            """
             extends: b.yaml
             grad_clip: 2.0
-        """)
+        """,
+        )
         cfg = load_config(tmp_path / "c.yaml")
-        assert cfg.seed == 7           # from b
-        assert cfg.grad_clip == 2.0    # from c
+        assert cfg.seed == 7  # from b
+        assert cfg.grad_clip == 2.0  # from c
         assert cfg.model.n_layer == 2  # from a
 
     def test_cycle_detected(self, tmp_path: Path) -> None:
@@ -255,6 +333,7 @@ class TestLoader:
 
 
 # ---------- TestOverrides: --override key=value parsing ----------
+
 
 class TestOverrides:
     def test_top_level_override(self, tmp_path: Path) -> None:
@@ -323,3 +402,23 @@ class TestOverrides:
         _write_yaml(tmp_path, "child.yaml", "extends: base.yaml\nseed: 5\n")
         cfg = load_config(tmp_path / "child.yaml", overrides=["seed=99"])
         assert cfg.seed == 99
+
+    def test_modern_arch_overrides(self, tmp_path: Path) -> None:
+        path = _write_yaml(tmp_path, "cfg.yaml", _full_yaml_body())
+        cfg = load_config(
+            path,
+            overrides=[
+                "model.n_kv_head=1",
+                "model.hidden_multiple=8",
+                "model.rope_theta=10000.0",
+                "model.vocab_pad_multiple=256",
+                "model.tie_weights=true",
+                "model.logit_softcap=null",
+            ],
+        )
+        assert cfg.model.n_kv_head == 1
+        assert cfg.model.hidden_multiple == 8
+        assert cfg.model.rope_theta == 10_000.0
+        assert cfg.model.vocab_pad_multiple == 256
+        assert cfg.model.tie_weights is True
+        assert cfg.model.logit_softcap is None

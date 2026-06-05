@@ -151,13 +151,16 @@ def get_most_likely_row(tokens: torch.Tensor, mask: torch.Tensor, logits: torch.
     _, avg_loss = compute_completion_losses(tokens, mask, logits)
     return int(avg_loss.argmin().item())
 
-def evaluate_hellaswag(model: nn.Module, *,
-                       encoder: tiktoken.Encoding,
-                       device: str | torch.device,
-                       rank: int,
-                       world_size: int,
-                       dtype: torch.dtype = torch.bfloat16,
-                       split: str = "val"
+
+def evaluate_hellaswag(
+    model: nn.Module,
+    *,
+    encoder: tiktoken.Encoding,
+    device: str | torch.device,
+    rank: int,
+    world_size: int,
+    dtype: torch.dtype = torch.bfloat16,
+    split: str = "val",
 ) -> EvalResult:
     """Score HellaSwag accuracy on a model, sharded across DDP ranks"""
     model.eval()
@@ -201,5 +204,6 @@ def evaluate_hellaswag(model: nn.Module, *,
     acc = num_correct / num_total if num_total > 0 else 0.0
     acc_norm = num_correct_norm / num_total if num_total > 0 else 0.0
 
-    return EvalResult(name="hellaswag", metrics={"acc": acc, "acc_norm": acc_norm}, num_examples=num_total)
-
+    return EvalResult(
+        name="hellaswag", metrics={"acc": acc, "acc_norm": acc_norm}, num_examples=num_total
+    )

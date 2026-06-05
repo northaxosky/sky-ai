@@ -8,12 +8,15 @@ import torch.nn.functional as F
 
 
 @torch.no_grad()
-def generate(model: nn.Module, prompt_ids: torch.Tensor, *,
-             max_new_tokens: int,
-             max_context_len: int = 1024,
-             temperature: float = 1.0,
-             top_k: int | None = 50,
-             generator: torch.Generator | None = None,
+def generate(
+    model: nn.Module,
+    prompt_ids: torch.Tensor,
+    *,
+    max_new_tokens: int,
+    max_context_len: int = 1024,
+    temperature: float = 1.0,
+    top_k: int | None = 50,
+    generator: torch.Generator | None = None,
 ) -> torch.Tensor:
     """Generate tokens autoregressively from a prompt"""
     if prompt_ids.dim() != 2:
@@ -24,7 +27,7 @@ def generate(model: nn.Module, prompt_ids: torch.Tensor, *,
         raise ValueError(f"temperature must be positive; got {temperature}")
     if top_k is not None and top_k < 1:
         raise ValueError(f"top_k must be >= 1 if specified; got {top_k}")
-    
+
     was_training = model.training
     model.eval()
     try:
@@ -47,6 +50,7 @@ def generate(model: nn.Module, prompt_ids: torch.Tensor, *,
     finally:
         if was_training:
             model.train()
+
 
 def _apply_top_k(logits: torch.Tensor, k: int) -> torch.Tensor:
     if k >= logits.size(-1):

@@ -141,8 +141,12 @@ class TestEvaluateLambada:
 
         model = _StubModel(vocab_size=encoder.n_vocab)
         result = lam.evaluate_lambada(
-            model, encoder=encoder, device="cpu",
-            rank=0, world_size=1, dtype=torch.float32,
+            model,
+            encoder=encoder,
+            device="cpu",
+            rank=0,
+            world_size=1,
+            dtype=torch.float32,
         )
         assert isinstance(result, EvalResult)
         assert result.name == "lambada"
@@ -160,12 +164,20 @@ class TestEvaluateLambada:
 
         model = _StubModel(vocab_size=encoder.n_vocab)
         r0 = lam.evaluate_lambada(
-            model, encoder=encoder, device="cpu",
-            rank=0, world_size=2, dtype=torch.float32,
+            model,
+            encoder=encoder,
+            device="cpu",
+            rank=0,
+            world_size=2,
+            dtype=torch.float32,
         )
         r1 = lam.evaluate_lambada(
-            model, encoder=encoder, device="cpu",
-            rank=1, world_size=2, dtype=torch.float32,
+            model,
+            encoder=encoder,
+            device="cpu",
+            rank=1,
+            world_size=2,
+            dtype=torch.float32,
         )
         assert r0.num_examples == 3
         assert r1.num_examples == 3

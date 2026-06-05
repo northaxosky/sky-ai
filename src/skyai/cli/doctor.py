@@ -44,6 +44,7 @@ def _check_torch() -> CheckResult:
 
 def _check_cuda() -> CheckResult:
     import torch
+
     if not torch.cuda.is_available():
         return ("WARN", "CUDA not available (CPU-only host)")
     n = torch.cuda.device_count()
@@ -52,6 +53,7 @@ def _check_cuda() -> CheckResult:
 
 def _check_gpu() -> CheckResult:
     import torch
+
     if not torch.cuda.is_available():
         return ("WARN", "skipped (no CUDA)")
     name = torch.cuda.get_device_name(0)
@@ -61,6 +63,7 @@ def _check_gpu() -> CheckResult:
 
 def _check_bf16() -> CheckResult:
     import torch
+
     if not torch.cuda.is_available():
         return ("WARN", "skipped (no CUDA)")
     if torch.cuda.is_bf16_supported():
@@ -70,13 +73,20 @@ def _check_bf16() -> CheckResult:
 
 def _check_visible_devices() -> CheckResult:
     import torch
+
     raw = os.environ.get("CUDA_VISIBLE_DEVICES")
     n_visible = torch.cuda.device_count() if torch.cuda.is_available() else 0
     if raw is None:
-        return ("OK", f"CUDA_VISIBLE_DEVICES not set ({n_visible} device{'s' if n_visible != 1 else ''} visible)")
+        return (
+            "OK",
+            f"CUDA_VISIBLE_DEVICES not set ({n_visible} device{'s' if n_visible != 1 else ''} visible)",
+        )
     requested = [s for s in raw.split(",") if s.strip()]
     if len(requested) != n_visible:
-        return ("WARN", f"CUDA_VISIBLE_DEVICES={raw!r} requested {len(requested)} devices, torch sees {n_visible}")
+        return (
+            "WARN",
+            f"CUDA_VISIBLE_DEVICES={raw!r} requested {len(requested)} devices, torch sees {n_visible}",
+        )
     return ("OK", f"CUDA_VISIBLE_DEVICES={raw!r}, {n_visible} visible")
 
 
@@ -96,8 +106,11 @@ def _check_ddp_env() -> CheckResult:
     except (KeyError, ValueError) as e:
         return ("FAIL", f"DDP vars non-integer or missing: {vars_} ({e})")
     if rank >= world or local_rank >= world:
-        return ("FAIL", f"DDP vars inconsistent: RANK={rank} LOCAL_RANK={local_rank} WORLD_SIZE={world}")
-    
+        return (
+            "FAIL",
+            f"DDP vars inconsistent: RANK={rank} LOCAL_RANK={local_rank} WORLD_SIZE={world}",
+        )
+
     # missing values will hang at init rather than fail loudly.
     if world > 1:
         master_addr = os.environ.get("MASTER_ADDR")
@@ -119,17 +132,24 @@ def _check_git() -> CheckResult:
     try:
         sha = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, check=True, timeout=5,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=5,
         ).stdout.strip()
     except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired):
         return ("WARN", "Not a git repo (or git not installed)")
     dirty_out = subprocess.run(
         ["git", "status", "--porcelain"],
-        capture_output=True, text=True, timeout=5,
+        capture_output=True,
+        text=True,
+        timeout=5,
     ).stdout.strip()
     branch = subprocess.run(
         ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-        capture_output=True, text=True, timeout=5,
+        capture_output=True,
+        text=True,
+        timeout=5,
     ).stdout.strip()
     state = "dirty" if dirty_out else "clean"
     return ("OK", f"{sha} ({state}) on {branch}")
@@ -166,31 +186,34 @@ def _check_checkpoint_dir(cfg: RunConfig) -> CheckResult:
     d.mkdir(parents=True, exist_ok=True)
     if not os.access(d, os.W_OK):
         return ("FAIL", f"{d}: not writable")
-    free_gb = shutil.disk_usage(d).free / (1024 ** 3)
+    free_gb = shutil.disk_usage(d).free / (1024**3)
 
     # Estimate checkpoint size from the GPT-2 parameter formula. AdamW saves
     # the params + (m, v) running stats in fp32, so plan ~16 bytes per param
     # (param + m + v + slack for buffers / serialization overhead).
     m = cfg.model
     n_params = (
-        m.vocab_size * m.n_embed                           # wte (tied with lm_head)
-        + m.block_size * m.n_embed                         # wpe
-        + m.n_layer * (12 * m.n_embed * m.n_embed          # 4 attn + 8 mlp matrices
-                        + 13 * m.n_embed)                   # LN params + biases (approx)
-        + 2 * m.n_embed                                    # final LN
+        m.vocab_size * m.n_embed  # wte (tied with lm_head)
+        + m.block_size * m.n_embed  # wpe
+        + m.n_layer
+        * (
+            12 * m.n_embed * m.n_embed  # 4 attn + 8 mlp matrices
+            + 13 * m.n_embed
+        )  # LN params + biases (approx)
+        + 2 * m.n_embed  # final LN
     )
-    per_ckpt_gb = n_params * 16 / (1024 ** 3)
+    per_ckpt_gb = n_params * 16 / (1024**3)
     needed_gb = per_ckpt_gb * (cfg.checkpoint.keep_last_n + 1)  # +1 for best.pt
 
     if free_gb < needed_gb:
-        return ("FAIL",
+        return (
+            "FAIL",
             f"{d}: {free_gb:.1f} GB free, need ~{needed_gb:.1f} GB "
-            f"({cfg.checkpoint.keep_last_n + 1} x {per_ckpt_gb:.1f} GB)")
+            f"({cfg.checkpoint.keep_last_n + 1} x {per_ckpt_gb:.1f} GB)",
+        )
     if free_gb < needed_gb * 1.5:
-        return ("WARN",
-            f"{d}: {free_gb:.1f} GB free, ~{needed_gb:.1f} GB planned; tight headroom")
-    return ("OK",
-        f"{d} writable, {free_gb:.1f} GB free, ~{needed_gb:.1f} GB planned")
+        return ("WARN", f"{d}: {free_gb:.1f} GB free, ~{needed_gb:.1f} GB planned; tight headroom")
+    return ("OK", f"{d} writable, {free_gb:.1f} GB free, ~{needed_gb:.1f} GB planned")
 
 
 def _check_world_size_divisibility(cfg: RunConfig) -> CheckResult:
@@ -204,10 +227,12 @@ def _check_world_size_divisibility(cfg: RunConfig) -> CheckResult:
         return ("FAIL", f"WORLD_SIZE={world_str!r} is not an integer")
     tokens_per_step = cfg.data.batch_size * cfg.model.block_size * world
     if cfg.total_batch_size % tokens_per_step != 0:
-        return ("FAIL",
+        return (
+            "FAIL",
             f"total_batch_size ({cfg.total_batch_size}) is not divisible by "
             f"B*T*WORLD_SIZE ({cfg.data.batch_size}*{cfg.model.block_size}*{world} "
-            f"= {tokens_per_step}); training will reject this at startup")
+            f"= {tokens_per_step}); training will reject this at startup",
+        )
     grad_accum = cfg.total_batch_size // tokens_per_step
     return ("OK", f"grad_accum = {grad_accum} at WORLD_SIZE={world}")
 

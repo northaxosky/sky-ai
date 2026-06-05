@@ -1,6 +1,5 @@
 """GPT should: shape-correct, loss-finite, GQA-aware, RoPE-table-correct"""
 
-
 import pytest
 import torch
 
@@ -17,7 +16,7 @@ def _tiny_config(**overrides) -> GPTConfig:
         logit_softcap=None,
     )
     base.update(overrides)
-    return GPTConfig(**base) # pyright: ignore
+    return GPTConfig(**base)  # pyright: ignore
 
 
 def test_forward_shapes():

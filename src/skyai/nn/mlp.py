@@ -29,4 +29,3 @@ class MLP(nn.Module):
         gate = F.silu(self.gate_proj(x))
         up = self.up_proj(x)
         return self.down_proj(gate * up)
-    

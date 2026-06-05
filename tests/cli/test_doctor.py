@@ -274,6 +274,7 @@ class TestCheckpointDir:
 
     def test_fails_when_free_disk_below_model_estimate(self, tmp_path, monkeypatch):
         import shutil as _shutil
+
         cfg_path = _minimal_cfg(tmp_path, tmp_path / "data")
         cfg = load_config(cfg_path, overrides=[])
         # Pretend almost no free disk; the model is small but >> 1 byte
@@ -333,9 +334,7 @@ class TestWandbAuth:
     def test_offline_mode_ok(self, tmp_path, monkeypatch):
         monkeypatch.setenv("WANDB_MODE", "offline")
         cfg_path = _minimal_cfg(tmp_path, tmp_path / "data")
-        cfg = load_config(
-            cfg_path, overrides=["log.wandb=true", "log.wandb_project=p"]
-        )
+        cfg = load_config(cfg_path, overrides=["log.wandb=true", "log.wandb_project=p"])
         status, _ = _check_wandb_auth(cfg)
         assert status == "OK"
 
@@ -343,9 +342,7 @@ class TestWandbAuth:
         monkeypatch.delenv("WANDB_API_KEY", raising=False)
         monkeypatch.delenv("WANDB_MODE", raising=False)
         cfg_path = _minimal_cfg(tmp_path, tmp_path / "data")
-        cfg = load_config(
-            cfg_path, overrides=["log.wandb=true", "log.wandb_project=p"]
-        )
+        cfg = load_config(cfg_path, overrides=["log.wandb=true", "log.wandb_project=p"])
         status, msg = _check_wandb_auth(cfg)
         assert status == "FAIL"
         assert "WANDB_API_KEY" in msg
@@ -354,17 +351,17 @@ class TestWandbAuth:
         monkeypatch.setenv("WANDB_API_KEY", "bogus")
         monkeypatch.delenv("WANDB_MODE", raising=False)
         cfg_path = _minimal_cfg(tmp_path, tmp_path / "data")
-        cfg = load_config(
-            cfg_path, overrides=["log.wandb=true", "log.wandb_project=p"]
-        )
+        cfg = load_config(cfg_path, overrides=["log.wandb=true", "log.wandb_project=p"])
         import wandb
 
         class _BoomApi:
             def __init__(self, *args, **kwargs) -> None:
                 pass
+
             @property
             def viewer(self):
                 raise RuntimeError("401 Unauthorized")
+
         monkeypatch.setattr(wandb, "Api", _BoomApi)
         status, msg = _check_wandb_auth(cfg)
         assert status == "FAIL"
@@ -374,17 +371,18 @@ class TestWandbAuth:
         monkeypatch.setenv("WANDB_API_KEY", "valid")
         monkeypatch.delenv("WANDB_MODE", raising=False)
         cfg_path = _minimal_cfg(tmp_path, tmp_path / "data")
-        cfg = load_config(
-            cfg_path, overrides=["log.wandb=true", "log.wandb_project=p"]
-        )
+        cfg = load_config(cfg_path, overrides=["log.wandb=true", "log.wandb_project=p"])
         import wandb
 
         class _FakeViewer:
             username = "tester"
+
         class _FakeApi:
             def __init__(self, *args, **kwargs) -> None:
                 pass
+
             viewer = _FakeViewer()
+
         monkeypatch.setattr(wandb, "Api", _FakeApi)
         status, msg = _check_wandb_auth(cfg)
         assert status == "OK"
@@ -408,6 +406,7 @@ class TestRunDoctor:
     def test_check_raises_caught_as_fail(self, monkeypatch, capsys):
         def boom() -> tuple[str, str]:
             raise RuntimeError("simulated breakage")
+
         monkeypatch.setattr(doctor_module, "_ENV_CHECKS", [("boom", boom)])
         rc = run_doctor(config_path=None)
         assert rc == 1

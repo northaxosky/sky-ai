@@ -19,6 +19,7 @@ def mock_wandb(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     monkeypatch.setattr("skyai.wandb_logger.wandb", mock)
     return mock
 
+
 def _enabled_cfg() -> LogConfig:
     return LogConfig(wandb=True, wandb_project="test-project")
 

@@ -29,8 +29,12 @@ def _reset_root_logger():
     root.handlers.extend(saved_handlers)
     root.setLevel(saved_level)
 
-def _make_cfg(tmp_path: Path, level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO") -> LogConfig:
+
+def _make_cfg(
+    tmp_path: Path, level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+) -> LogConfig:
     return LogConfig(dir=tmp_path, level=level, wandb=False, wandb_project=None)
+
 
 def _skyai_handlers() -> list[logging.Handler]:
     return [h for h in logging.getLogger().handlers if getattr(h, "_skyai", False)]
@@ -53,7 +57,8 @@ class TestSetupLogging:
         setup_logging(_make_cfg(tmp_path, level="DEBUG"), rank=1)
         # FileHandler subclasses StreamHandler; exclude it explicitly.
         console = next(
-            h for h in _skyai_handlers()
+            h
+            for h in _skyai_handlers()
             if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
         )
         assert console.level == logging.WARNING
@@ -61,7 +66,8 @@ class TestSetupLogging:
     def test_rank0_console_respects_cfg_level(self, tmp_path: Path) -> None:
         setup_logging(_make_cfg(tmp_path, level="DEBUG"), rank=0)
         console = next(
-            h for h in _skyai_handlers()
+            h
+            for h in _skyai_handlers()
             if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
         )
         assert console.level == logging.DEBUG
@@ -131,7 +137,7 @@ class TestRankFilter:
         filt = _RankFilter(rank=2)
         record = logging.LogRecord("x", logging.INFO, "f", 1, "msg", None, None)
         assert filt.filter(record) is True
-        assert record.rank == 2 # pyright: ignore
+        assert record.rank == 2  # pyright: ignore
 
     def test_never_drops_records(self) -> None:
         filt = _RankFilter(rank=0)

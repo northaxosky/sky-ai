@@ -18,6 +18,7 @@ def load_config(path: str | Path, overrides: list[str] | None = None) -> RunConf
             _apply_override(merged, override)
     return RunConfig.model_validate(merged)
 
+
 def _load_and_merge(path: Path, seen: set[Path]) -> dict[str, Any]:
     """Load a YAML file and recursively merge with any `extends:` parent"""
     if not path.exists():
@@ -32,14 +33,15 @@ def _load_and_merge(path: Path, seen: set[Path]) -> dict[str, Any]:
         data = yaml.safe_load(file) or {}
     if not isinstance(data, dict):
         raise ValueError(f"{path} must contain a YAML mapping at the top level")
-    
+
     parent_ref = data.pop("extends", None)
     if parent_ref is None:
         return data
-    
+
     parent_path = (path.parent / parent_ref).resolve()
     parent_data = _load_and_merge(parent_path, seen)
     return _deep_merge(parent_data, data)
+
 
 def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
     """Recursively merge `override` into `base`, Override wins for non-dict leaves"""
@@ -51,6 +53,7 @@ def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any
             result[key] = value
     return result
 
+
 def _apply_override(data: dict[str, Any], override: str) -> None:
     """Apply a `a.b.c = value` override into a nested dict in place"""
     if "=" not in override:
@@ -59,7 +62,7 @@ def _apply_override(data: dict[str, Any], override: str) -> None:
     key = key.strip()
     if not key:
         raise ValueError(f"Empty key in override: {override!r}")
-    
+
     parts = key.split(".")
     cursor: dict[str, Any] = data
     for part in parts[:-1]:
@@ -70,6 +73,7 @@ def _apply_override(data: dict[str, Any], override: str) -> None:
         cursor = next_cursor
     cursor[parts[-1]] = _parse_scalar(value)
 
+
 def _parse_scalar(value: str) -> Any:
     """Parse a CLI override value string"""
     value = value.strip()
@@ -77,7 +81,7 @@ def _parse_scalar(value: str) -> Any:
         return value.lower() == "true"
     if value.lower() in ("none", "null"):
         return None
-    
+
     try:
         return int(value)
     except ValueError:

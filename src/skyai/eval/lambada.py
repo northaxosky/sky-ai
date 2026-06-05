@@ -23,41 +23,47 @@ LAMBADA_REVISION = "900124bf3b8235c6daf21033af9948b3f07346c4"
 
 def _load_examples() -> list[str]:
     """Load LAMBADA OpenAI test passages as raw strings"""
-    ds = load_dataset(
-        LAMBADA_DATASET_ID,
-        split=LAMBADA_SPLIT,
-        revision=LAMBADA_REVISION
-    )
-    return [ex["text"] for ex in ds] # pyright: ignore
+    ds = load_dataset(LAMBADA_DATASET_ID, split=LAMBADA_SPLIT, revision=LAMBADA_REVISION)
+    return [ex["text"] for ex in ds]  # pyright: ignore
 
-def _render_lambada(text: str, encoder: tiktoken.Encoding, block_size: int) -> tuple[torch.Tensor, torch.Tensor, int]:
+
+def _render_lambada(
+    text: str, encoder: tiktoken.Encoding, block_size: int
+) -> tuple[torch.Tensor, torch.Tensor, int]:
     """Encode a LAMBADA passage and split into model input + ground truth target"""
     _, sep, target = text.rpartition(" ")
     if not sep or not target:
         raise ValueError(f"LAMBADA passage has no whitespace boundary: {text!r}")
-    
+
     full_ids = encoder.encode(text)
     target_len = len(encoder.encode(" " + target))
     if target_len >= len(full_ids):
-        raise ValueError(f"target_len ({target_len}) >= len(full_ids) ({len(full_ids)}) for {text!r}")
-    
+        raise ValueError(
+            f"target_len ({target_len}) >= len(full_ids) ({len(full_ids)}) for {text!r}"
+        )
+
     if len(full_ids) > block_size:
         full_ids = full_ids[-block_size:]
         if target_len >= len(full_ids):
-            raise ValueError(f"target_len ({target_len}) >= block_size ({block_size}) after truncation")
-        
+            raise ValueError(
+                f"target_len ({target_len}) >= block_size ({block_size}) after truncation"
+            )
+
     input_ids = torch.tensor(full_ids[:-1], dtype=torch.long).unsqueeze(0)
     gt_target_ids = torch.tensor(full_ids[-target_len:], dtype=torch.long)
     return input_ids, gt_target_ids, target_len
 
-def _score_lambada_logits(logits: torch.Tensor, gt_target_ids: torch.Tensor, target_len: int) -> tuple[torch.Tensor, torch.Tensor]:
+
+def _score_lambada_logits(
+    logits: torch.Tensor, gt_target_ids: torch.Tensor, target_len: int
+) -> tuple[torch.Tensor, torch.Tensor]:
     """Score model logits against the ground truth target span.
 
     Returns (is_correct, sum_nll) as 0-d tensors on the same device as logits.
     Keeping the result on-device lets the caller accumulate without per-example
     GPU->CPU syncs.
     """
-    target_logits = logits[0, -target_len:, :] # (target_len, vocab)
+    target_logits = logits[0, -target_len:, :]  # (target_len, vocab)
 
     preds = target_logits.argmax(dim=-1)
     is_correct = (preds == gt_target_ids).all().long()
@@ -68,13 +74,16 @@ def _score_lambada_logits(logits: torch.Tensor, gt_target_ids: torch.Tensor, tar
     sum_nll = -gt_log_probs.sum()
     return is_correct, sum_nll
 
-def evaluate_lambada(model:nn.Module, *,
-                     encoder: tiktoken.Encoding,
-                     device: str | torch.device,
-                     rank: int,
-                     world_size: int,
-                     dtype: torch.dtype = torch.bfloat16,
-                     block_size: int = 1024,
+
+def evaluate_lambada(
+    model: nn.Module,
+    *,
+    encoder: tiktoken.Encoding,
+    device: str | torch.device,
+    rank: int,
+    world_size: int,
+    dtype: torch.dtype = torch.bfloat16,
+    block_size: int = 1024,
 ) -> EvalResult:
     """Score LAMBADA OpenAI accuracy + perplexity on a model"""
     model.eval()
@@ -118,4 +127,8 @@ def evaluate_lambada(model:nn.Module, *,
     accuracy = num_correct / num_total if num_total > 0 else 0.0
     perplexity = math.exp(nll_sum / n_tokens) if n_tokens > 0 else float("inf")
 
-    return EvalResult(name="lambada", metrics={"accuracy": accuracy, "perplexity": perplexity}, num_examples=num_total)
+    return EvalResult(
+        name="lambada",
+        metrics={"accuracy": accuracy, "perplexity": perplexity},
+        num_examples=num_total,
+    )

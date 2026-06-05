@@ -30,14 +30,14 @@ class Profiler:
     @property
     def enabled(self) -> bool:
         return self.cfg.enabled and self.rank == 0
-    
+
     @contextmanager
     def region(self, name: str) -> Iterator[None]:
         """Time everything inside the with block"""
         if not self.enabled:
             yield
             return
-        
+
         if self._is_cuda:
             if self.cfg.cuda_sync:
                 torch.cuda.synchronize(self.device)
@@ -64,11 +64,11 @@ class Profiler:
         if not self.enabled:
             return False
         return step > 0 and step % self.cfg.log_every == 0
-    
+
     def _drain_pending(self) -> None:
         if not self._pending:
             return
-        
+
         torch.cuda.synchronize(self.device)
         for name, start, end in self._pending:
             self._samples[name].append(start.elapsed_time(end))
@@ -83,7 +83,7 @@ class Profiler:
         summary: dict[str, float] = {}
         parts: list[str] = []
         total = 0.0
-        
+
         for name in sorted(self._samples):
             times = self._samples[name]
             mean = sum(times) / len(times)
@@ -94,7 +94,7 @@ class Profiler:
             summary[f"profile/{name}_count"] = float(len(times))
             parts.append(f"{name}={mean:.2f}ms")
             total += region_total
-        
+
         summary["profile/total_ms"] = total
         summary["profile/window_steps"] = float(self.cfg.log_every)
 
@@ -104,7 +104,7 @@ class Profiler:
         )
         self._samples.clear()
         return summary
-    
+
     def flush(self, step: int) -> dict[str, float]:
         """Final drain at end of training"""
         if not self.enabled:

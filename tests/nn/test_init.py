@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 
@@ -41,6 +40,7 @@ def test_bias_is_zeroed_when_present():
 
 def test_rmsnorm_is_unaffected():
     from skyai.nn.layers import RMSNorm
+
     norm = RMSNorm(128)
     init_weights(norm, n_layer=12)
     assert len(list(norm.parameters())) == 0

@@ -32,27 +32,30 @@ def _make_smoke_shards(data_root: Path, vocab_size: int, n_tokens: int = 4096) -
     np.save(data_root / "val_000.npy", val)
 
 
-def _smoke_cfg(tmp_path: Path, *, max_steps: int = 5,
-            evals: list[str] | None = None) -> RunConfig:
+def _smoke_cfg(tmp_path: Path, *, max_steps: int = 5, evals: list[str] | None = None) -> RunConfig:
     data_root = tmp_path / "data"
     # vocab_size must accept gpt2 tokenizer ids (used by the loop's hardcoded
     # sampling block); block_size must fit the sample prompt + new tokens.
     vocab_size = 50257
     _make_smoke_shards(data_root, vocab_size=vocab_size)
     return RunConfig(
-        seed=42, dtype="float32", compile=False, grad_clip=1.0, total_batch_size=256,
-        model=ModelConfig(n_layer=2, n_head=2, n_embed=32,
-                        vocab_size=vocab_size, block_size=64),
+        seed=42,
+        dtype="float32",
+        compile=False,
+        grad_clip=1.0,
+        total_batch_size=256,
+        model=ModelConfig(n_layer=2, n_head=2, n_embed=32, vocab_size=vocab_size, block_size=64),
         data=DataConfig(root=data_root, batch_size=4),
         optim=OptimConfig(weight_decay=0.0),
-        schedule=ScheduleConfig(max_lr=1e-3, min_lr=1e-4,
-                                warmup_steps=1, max_steps=max_steps),
-        eval=EvalConfig(interval=2, val_steps=1,
-                        evals=evals if evals is not None else []),  # pyright: ignore
+        schedule=ScheduleConfig(max_lr=1e-3, min_lr=1e-4, warmup_steps=1, max_steps=max_steps),
+        eval=EvalConfig(interval=2, val_steps=1, evals=evals if evals is not None else []),  # pyright: ignore
         log=LogConfig(dir=tmp_path / "logs", wandb=False),
         checkpoint=CheckpointConfig(
-            dir=tmp_path / "ckpt", every_n_steps=2, keep_last_n=3,
-            best_metric="val_loss", best_direction="min",
+            dir=tmp_path / "ckpt",
+            every_n_steps=2,
+            keep_last_n=3,
+            best_metric="val_loss",
+            best_direction="min",
         ),
     )
 
@@ -83,24 +86,31 @@ class TestEndToEndSmoke:
         first_latest = json.loads((cfg.checkpoint.dir / "latest.json").read_text())["step"]
         assert first_latest == 2  # last step under max_steps=3 (step 2 is last_step)
 
-        cfg2 = cfg.model_copy(update={
-            "schedule": cfg.schedule.model_copy(update={"max_steps": 6}),
-        })
+        cfg2 = cfg.model_copy(
+            update={
+                "schedule": cfg.schedule.model_copy(update={"max_steps": 6}),
+            }
+        )
         loop.train(cfg2, resume=True)
         second_latest = json.loads((cfg.checkpoint.dir / "latest.json").read_text())["step"]
         assert second_latest == 5
         assert second_latest > first_latest
 
     def test_eval_block_dispatches_to_run_evals(
-        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         calls: list[dict] = []
 
         def fake_run_evals(names, model, *, encoder, device, rank, world_size, dtype):
-            calls.append({
-                "names": list(names),
-                "rank": rank, "world_size": world_size,
-            })
+            calls.append(
+                {
+                    "names": list(names),
+                    "rank": rank,
+                    "world_size": world_size,
+                }
+            )
             return {}
 
         monkeypatch.setattr(loop, "run_evals", fake_run_evals)

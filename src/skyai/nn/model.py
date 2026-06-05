@@ -16,6 +16,7 @@ from skyai.nn.layers import Linear, RMSNorm
 def _pad_to_multiple(n: int, multiple: int) -> int:
     return ((n + multiple - 1) // multiple) * multiple
 
+
 @dataclass
 class GPTConfig:
     block_size: int = 1024
@@ -45,20 +46,23 @@ class _Transformer(nn.Module):
     def __init__(self, config: GPTConfig) -> None:
         super().__init__()
         self.wte = nn.Embedding(config.vocab_size_padded, config.n_embed)
-        self.h = nn.ModuleList([
-            Block(
-                n_embed=config.n_embed,
-                n_head=config.n_head,
-                n_kv_head=config.n_kv_head,
-                hidden_multiple=config.hidden_multiple,
-            )
-            for _ in range(config.n_layer)
-        ])
+        self.h = nn.ModuleList(
+            [
+                Block(
+                    n_embed=config.n_embed,
+                    n_head=config.n_head,
+                    n_kv_head=config.n_kv_head,
+                    hidden_multiple=config.hidden_multiple,
+                )
+                for _ in range(config.n_layer)
+            ]
+        )
         self.ln_f = RMSNorm(config.n_embed)
 
 
 class GPT(nn.Module):
     """GPT-2 Language Model"""
+
     cos: torch.Tensor
     sin: torch.Tensor
 
@@ -80,19 +84,22 @@ class GPT(nn.Module):
 
     def _build_rotary_tables(self) -> tuple[torch.Tensor, torch.Tensor]:
         head_dim = self.config.head_dim
-        inv_freq = 1.0 / (self.config.rope_theta ** (torch.arange(0, head_dim, 2).float() / head_dim))
+        inv_freq = 1.0 / (
+            self.config.rope_theta ** (torch.arange(0, head_dim, 2).float() / head_dim)
+        )
         pos = torch.arange(self.config.block_size).float()
         angles = torch.outer(pos, inv_freq)
         cos = angles.cos()[None, :, None, :]
         sin = angles.sin()[None, :, None, :]
         return cos, sin
 
-    def forward(self, idx: torch.Tensor, targets: torch.Tensor | None = None
-                ) -> tuple[torch.Tensor, torch.Tensor | None]:
+    def forward(
+        self, idx: torch.Tensor, targets: torch.Tensor | None = None
+    ) -> tuple[torch.Tensor, torch.Tensor | None]:
         _, T = idx.size()
         if self.config.block_size < T:
-            raise ValueError(f'Sequence length {T} exceeds block_size {self.config.block_size}')
-        
+            raise ValueError(f"Sequence length {T} exceeds block_size {self.config.block_size}")
+
         cos = self.cos[:, :T]
         sin = self.sin[:, :T]
 
@@ -114,4 +121,3 @@ class GPT(nn.Module):
                 targets.view(-1),
             )
         return logits, loss
-

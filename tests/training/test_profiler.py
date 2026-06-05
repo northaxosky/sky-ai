@@ -74,8 +74,12 @@ class TestCpuTiming:
             time.sleep(0.001)
         summary = prof.log_and_reset(step=10)
         for k in (
-            "profile/foo_mean_ms", "profile/foo_total_ms", "profile/foo_count",
-            "profile/bar_mean_ms", "profile/total_ms", "profile/window_steps",
+            "profile/foo_mean_ms",
+            "profile/foo_total_ms",
+            "profile/foo_count",
+            "profile/bar_mean_ms",
+            "profile/total_ms",
+            "profile/window_steps",
         ):
             assert k in summary
         # samples cleared after the call

@@ -30,15 +30,41 @@ class ModelConfig(BaseModel):
 
     n_layer: int = Field(gt=0, description="Number of transformer blocks")
     n_head: int = Field(gt=0, description="Number of attention heads")
+    n_kv_head: int | None = Field(default=None, gt=0, description="Number of KV heads for GQA")
     n_embed: int = Field(gt=0, description="Hidden dim, must be divisible by n_head")
+    hidden_multiple: int = Field(default=4, gt=0, description="MLP hidden size multiplier")
     vocab_size: int = Field(gt=0, description="Tokenizer vocabulary size")
+    vocab_pad_multiple: int = Field(
+        default=128, gt=0, description="Internal vocab padding multiple"
+    )
     block_size: int = Field(gt=0, description="Max sequence length / context window")
-    tokenizer: str = Field(default="gpt2", description="tiktoken encoding name; must match the model's vocab")
+    rope_theta: float = Field(default=100_000.0, gt=0.0, description="RoPE frequency base")
+    tokenizer: str = Field(
+        default="gpt2", description="tiktoken encoding name; must match the model's vocab"
+    )
+    tie_weights: bool = Field(default=False, description="Tie token embedding and lm_head weights")
+    logit_softcap: float | None = Field(
+        default=15.0, gt=0.0, description="Optional tanh logit softcap"
+    )
 
     @model_validator(mode="after")
     def _embed_divisible_by_head(self) -> ModelConfig:
         if self.n_embed % self.n_head != 0:
-            raise ValueError(f"n_embed ({self.n_embed}) must be divisible by n_head ({self.n_head})")
+            raise ValueError(
+                f"n_embed ({self.n_embed}) must be divisible by n_head ({self.n_head})"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _kv_heads_divide_query_heads(self) -> ModelConfig:
+        if self.n_kv_head is None:
+            return self
+        if self.n_kv_head > self.n_head:
+            raise ValueError(f"n_kv_head ({self.n_kv_head}) must be <= n_head ({self.n_head})")
+        if self.n_head % self.n_kv_head != 0:
+            raise ValueError(
+                f"n_head ({self.n_head}) must be divisible by n_kv_head ({self.n_kv_head})"
+            )
         return self
 
     @model_validator(mode="after")
@@ -50,14 +76,14 @@ class ModelConfig(BaseModel):
                 f"'{self.tokenizer}' n_vocab ({encoder_vocab}); valid token ids "
                 f"would be out of range of the lm_head"
             )
-        # Allow padding for tensor-core alignment (e.g. 50257 -> 50304) but
-        # cap it so a wrong tokenizer/vocab pair fails loudly.
-        max_pad = 1024
-        if self.vocab_size > encoder_vocab + max_pad:
+        max_vocab_size = (
+            (encoder_vocab + self.vocab_pad_multiple - 1) // self.vocab_pad_multiple
+        ) * self.vocab_pad_multiple
+        if self.vocab_size > max_vocab_size:
             raise ValueError(
-                f"vocab_size ({self.vocab_size}) is more than {max_pad} above "
-                f"tokenizer '{self.tokenizer}' n_vocab ({encoder_vocab}); "
-                f"almost certainly a wrong tokenizer/vocab pair"
+                f"vocab_size ({self.vocab_size}) exceeds tokenizer '{self.tokenizer}' "
+                f"n_vocab ({encoder_vocab}) padded to vocab_pad_multiple "
+                f"{self.vocab_pad_multiple} ({max_vocab_size})"
             )
         return self
 
@@ -93,9 +119,8 @@ class ScheduleConfig(BaseModel):
             raise ValueError(f"min_lr ({self.min_lr}) must be <= max_lr ({self.max_lr})")
         if self.warmup_steps > self.max_steps:
             raise ValueError(
-                f"warmup_steps ({self.warmup_steps}) must"
-                f"be <= max_steps ({self.max_steps})"
-                )
+                f"warmup_steps ({self.warmup_steps}) mustbe <= max_steps ({self.max_steps})"
+            )
         return self
 
 
@@ -105,15 +130,16 @@ class EvalConfig(BaseModel):
     interval: int = Field(gt=0, description="Run eval every n training steps")
     val_steps: int = Field(default=20, gt=0, description="Microbatches per val pass")
     evals: list[Literal["hellaswag", "lambada"]] = Field(
-        default_factory=lambda: ["hellaswag"],
-        description="Names of evals to run, order preserved"
+        default_factory=lambda: ["hellaswag"], description="Names of evals to run, order preserved"
     )
     sample_prompt: str = Field(
         default="Hello, I'm a language model,",
         description="Prompt fed to the periodic sampler",
     )
     sample_n: int = Field(default=4, gt=0, description="Number of completions per sample step")
-    sample_max_length: int = Field(default=32, gt=0, description="Max total length (prompt + new tokens)")
+    sample_max_length: int = Field(
+        default=32, gt=0, description="Max total length (prompt + new tokens)"
+    )
 
 
 class LogConfig(BaseModel):
@@ -137,14 +163,22 @@ class ProfilingConfig(BaseModel):
 
     enabled: bool = False
     log_every: int = Field(default=100, gt=0, description="Emit breakdown every N steps")
-    cuda_sync: bool = Field(default=False, description="Force torch.cuda.synchronize for precise timing (expensive)")
+    cuda_sync: bool = Field(
+        default=False, description="Force torch.cuda.synchronize for precise timing (expensive)"
+    )
 
 
 class RecoveryConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    nan_grad_action: Literal["halt", "skip"] = Field(default="halt", description="What to do when a parameter gradient is NaN/Inf")
-    oom_dump_diagnostics: bool = Field(default=True, description="On torch.cuda.OutOfMemoryError, log VRAM stats and batch geometry")
+    nan_grad_action: Literal["halt", "skip"] = Field(
+        default="halt", description="What to do when a parameter gradient is NaN/Inf"
+    )
+    oom_dump_diagnostics: bool = Field(
+        default=True,
+        description="On torch.cuda.OutOfMemoryError, log VRAM stats and batch geometry",
+    )
+
 
 class CheckpointConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -152,7 +186,9 @@ class CheckpointConfig(BaseModel):
     dir: Path = Path("checkpoints")
     every_n_steps: int = Field(default=1000, gt=0)
     keep_last_n: int = Field(default=3, ge=1, description="Rolling window size for step_*.pt")
-    best_metric: str | None = Field(default="val_loss", description="Name of metric to track for best.pt")
+    best_metric: str | None = Field(
+        default="val_loss", description="Name of metric to track for best.pt"
+    )
     best_direction: Literal["min", "max"] = "min"
 
 

@@ -109,6 +109,7 @@ def _set_seeds(seed: int) -> None:
 def _build_model(cfg: RunConfig, device: str, dist_info: DistInfo) -> tuple[nn.Module, GPT]:
     """Build GPT, move to device, optionally compile + DDP"""
     gpt_cfg = GPTConfig(
+        init_policy=cfg.model.init_policy,
         n_layer=cfg.model.n_layer,
         n_head=cfg.model.n_head,
         n_kv_head=cfg.model.n_kv_head,
@@ -174,6 +175,7 @@ def _build_components(
 
 
 _RESUME_CRITICAL_FIELDS: list[tuple[str, Any]] = [
+    ("model.init_policy", lambda c: c.model.init_policy),
     ("total_batch_size", lambda c: c.total_batch_size),
     ("model.n_layer", lambda c: c.model.n_layer),
     ("model.n_head", lambda c: c.model.n_head),
@@ -431,7 +433,7 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
 
                 with profiler.region("eval_suite"):
                     eval_results = run_evals(
-                        cfg.eval.evals,
+                        cfg.eval.evals,  # pyright: ignore
                         raw_model,  # pyright: ignore
                         encoder=encoder,
                         device=device,

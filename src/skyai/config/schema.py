@@ -28,6 +28,9 @@ def _tokenizer_vocab(name: str) -> int:
 class ModelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    init_policy: Literal["gpt2", "skyai"] = Field(
+        default="gpt2", description="Weight initialization policy"
+    )
     n_layer: int = Field(gt=0, description="Number of transformer blocks")
     n_head: int = Field(gt=0, description="Number of attention heads")
     n_kv_head: int | None = Field(default=None, gt=0, description="Number of KV heads for GQA")

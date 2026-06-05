@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Literal
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from skyai.nn.block import Block
-from skyai.nn.init import init_weights
+from skyai.nn.init import init_sky_ai_weights, init_weights
 from skyai.nn.layers import Linear, RMSNorm
 
 
@@ -19,6 +20,7 @@ def _pad_to_multiple(n: int, multiple: int) -> int:
 
 @dataclass
 class GPTConfig:
+    init_policy: Literal["gpt2", "skyai"] = "gpt2"
     block_size: int = 1024
     vocab_size: int = 50257
     n_layer: int = 12
@@ -80,7 +82,18 @@ class GPT(nn.Module):
         self.register_buffer("cos", cos, persistent=False)
         self.register_buffer("sin", sin, persistent=False)
 
-        self.apply(lambda m: init_weights(m, n_layer=config.n_layer))
+        if config.init_policy == "gpt2":
+            self.apply(lambda m: init_weights(m, n_layer=config.n_layer))
+        elif config.init_policy == "skyai":
+            init_sky_ai_weights(
+                wte=self.transformer.wte,
+                lm_head=self.lm_head,
+                blocks=self.transformer.h,
+                n_embed=config.n_embed,
+                tie_weights=config.tie_weights,
+            )
+        else:
+            raise ValueError(f"Unknown init_policy {config.init_policy!r}")
 
     def _build_rotary_tables(self) -> tuple[torch.Tensor, torch.Tensor]:
         head_dim = self.config.head_dim

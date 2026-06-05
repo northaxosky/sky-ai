@@ -48,6 +48,7 @@ class _Transformer(nn.Module):
     def __init__(self, config: GPTConfig) -> None:
         super().__init__()
         self.wte = nn.Embedding(config.vocab_size_padded, config.n_embed)
+        self.embed_norm = RMSNorm(config.n_embed)
         self.h = nn.ModuleList(
             [
                 Block(
@@ -116,7 +117,7 @@ class GPT(nn.Module):
         cos = self.cos[:, :T]
         sin = self.sin[:, :T]
 
-        x = self.transformer.wte(idx)
+        x = self.transformer.embed_norm(self.transformer.wte(idx))
         for block in self.transformer.h:
             x = block(x, cos, sin)
 

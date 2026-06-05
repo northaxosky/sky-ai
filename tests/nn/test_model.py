@@ -3,6 +3,7 @@
 import pytest
 import torch
 
+from skyai.nn.layers import RMSNorm
 from skyai.nn.model import GPT, GPTConfig
 
 
@@ -55,6 +56,11 @@ def test_tied_weights_share_storage():
     cfg = _tiny_config(tie_weights=True)
     model = GPT(cfg)
     assert model.lm_head.weight.data_ptr() == model.transformer.wte.weight.data_ptr()
+
+
+def test_token_embeddings_are_normalized_before_blocks():
+    model = GPT(_tiny_config())
+    assert isinstance(model.transformer.embed_norm, RMSNorm)
 
 
 def test_rope_tables_match_config():

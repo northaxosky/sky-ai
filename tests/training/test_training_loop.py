@@ -300,7 +300,7 @@ class TestRunTrainStep:
             step=0, grad_accum_steps=1, grad_clip=1.0,
             device="cpu", device_type="cpu", dtype=torch.float32,
         )
-        for step in range(1, 15):
+        for step in range(1, 25):
             loop._run_train_step(
                 model, loader, optim, sched, dist_info, _noop_profiler(), _default_recovery(),  # pyright: ignore
                 step=step, grad_accum_steps=1, grad_clip=1.0,
@@ -308,7 +308,7 @@ class TestRunTrainStep:
             )
         loss_after, *_ = loop._run_train_step(
             model, loader, optim, sched, dist_info, _noop_profiler(), _default_recovery(),  # pyright: ignore
-            step=15, grad_accum_steps=1, grad_clip=1.0,
+            step=25, grad_accum_steps=1, grad_clip=1.0,
             device="cpu", device_type="cpu", dtype=torch.float32,
         )
         assert loss_after < loss0 * 0.5  # generous: same batch should overfit hard

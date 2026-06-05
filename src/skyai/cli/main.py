@@ -14,8 +14,9 @@ from skyai.checkpoint import load_checkpoint
 from skyai.config.loader import load_config
 from skyai.config.schema import LogConfig, RunConfig
 from skyai.log import get_logger, setup_logging
-from skyai.nn.model import GPT, GPTConfig
+from skyai.nn.model import GPT
 from skyai.sample import sample as sample_fn
+from skyai.training.loop import build_gpt_config
 
 app = typer.Typer(
     name="skyai",
@@ -89,15 +90,7 @@ def evaluate(
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     mc = bundle.config.model
-    model = GPT(
-        GPTConfig(
-            n_layer=mc.n_layer,
-            n_head=mc.n_head,
-            n_embed=mc.n_embed,
-            vocab_size=mc.vocab_size,
-            block_size=mc.block_size,
-        )
-    )
+    model = GPT(build_gpt_config(mc))
     model.load_state_dict(bundle.model_state)
     model.to(device).eval()
 
@@ -134,15 +127,7 @@ def sample(
 
     bundle = load_checkpoint(checkpoint)
     mc = bundle.config.model
-    model = GPT(
-        GPTConfig(
-            n_layer=mc.n_layer,
-            n_head=mc.n_head,
-            n_embed=mc.n_embed,
-            vocab_size=mc.vocab_size,
-            block_size=mc.block_size,
-        )
-    )
+    model = GPT(build_gpt_config(mc))
     model.load_state_dict(bundle.model_state)
     model.to(device).eval()
 

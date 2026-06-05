@@ -25,7 +25,7 @@ def test_forward_shapes():
     model = GPT(cfg)
     idx = torch.randint(0, cfg.vocab_size, (2, 16))
     logits, loss = model(idx)
-    assert logits.shape == (2, 16, cfg.vocab_size_padded)
+    assert logits.shape == (2, 16, cfg.vocab_size)
     assert loss is None
 
 
@@ -44,6 +44,17 @@ def test_vocab_is_padded_to_multiple():
     model = GPT(cfg)
     assert model.lm_head.weight.shape == (128, cfg.n_embed)
     assert model.transformer.wte.weight.shape == (128, cfg.n_embed)
+
+
+def test_forward_excludes_padded_vocab_from_logits():
+    cfg = _tiny_config(vocab_size=100, vocab_pad_multiple=128)
+    model = GPT(cfg)
+    idx = torch.randint(0, cfg.vocab_size, (2, 16))
+
+    logits, _ = model(idx)
+
+    assert logits.shape[-1] == cfg.vocab_size
+    assert model.lm_head.weight.shape[0] == cfg.vocab_size_padded
 
 
 def test_untied_weights_are_independent():

@@ -41,7 +41,7 @@ def _minimal_yaml(tmp_path: Path) -> Path:
             "n_layer": 2,
             "n_head": 4,
             "n_embed": 64,
-            "vocab_size": 100,
+            "vocab_size": 50257,
             "block_size": 16,
         },
         "data": {
@@ -118,7 +118,8 @@ class TestSampleEndToEnd:
 
         from skyai.checkpoint import save_checkpoint
         from skyai.config.loader import load_config
-        from skyai.nn.model import GPT, GPTConfig
+        from skyai.nn.model import GPT
+        from skyai.training.loop import build_gpt_config
         from skyai.training.optimizer import build_optimizer
 
         # write a tiny but valid YAML config (vocab matches gpt2 for the CLI's encoder)
@@ -127,10 +128,17 @@ class TestSampleEndToEnd:
             "model": {
                 "n_layer": 2,
                 "n_head": 2,
+                "n_kv_head": 1,
                 "n_embed": 32,
+                "hidden_multiple": 8,
                 "vocab_size": 50257,
+                "vocab_pad_multiple": 256,
                 "block_size": 64,
+                "rope_theta": 10_000.0,
                 "tokenizer": "gpt2",
+                "tie_weights": True,
+                "logit_softcap": None,
+                "init_policy": "sky-ai",
             },
             "data": {"root": str(tmp_path / "shards"), "batch_size": 4},
             "optim": {"weight_decay": 0.0},
@@ -143,15 +151,7 @@ class TestSampleEndToEnd:
         cfg_path.write_text(yaml.safe_dump(cfg_dict))
         cfg = load_config(cfg_path)
 
-        model = GPT(
-            GPTConfig(
-                n_layer=cfg.model.n_layer,
-                n_head=cfg.model.n_head,
-                n_embed=cfg.model.n_embed,
-                vocab_size=cfg.model.vocab_size,
-                block_size=cfg.model.block_size,
-            )
-        )
+        model = GPT(build_gpt_config(cfg.model))
         optim = build_optimizer(model, learning_rate=1e-3, weight_decay=0.0, device_type="cpu")
 
         class _StubLoader:

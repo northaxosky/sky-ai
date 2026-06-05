@@ -18,7 +18,7 @@ from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from skyai.checkpoint import load_checkpoint, restore_rng, save_checkpoint
-from skyai.config.schema import RecoveryConfig, RunConfig
+from skyai.config.schema import ModelConfig, RecoveryConfig, RunConfig
 from skyai.data.loader import DataLoader
 from skyai.eval import run_evals
 from skyai.log import get_logger
@@ -106,22 +106,27 @@ def _set_seeds(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
+def build_gpt_config(model_cfg: ModelConfig) -> GPTConfig:
+    """Translate run config into GPT's logical-vocab config."""
+    return GPTConfig(
+        init_policy=model_cfg.init_policy,
+        n_layer=model_cfg.n_layer,
+        n_head=model_cfg.n_head,
+        n_kv_head=model_cfg.n_kv_head,
+        n_embed=model_cfg.n_embed,
+        hidden_multiple=model_cfg.hidden_multiple,
+        vocab_size=model_cfg.tokenizer_vocab_size,
+        vocab_pad_multiple=model_cfg.vocab_pad_multiple,
+        block_size=model_cfg.block_size,
+        rope_theta=model_cfg.rope_theta,
+        tie_weights=model_cfg.tie_weights,
+        logit_softcap=model_cfg.logit_softcap,
+    )
+
+
 def _build_model(cfg: RunConfig, device: str, dist_info: DistInfo) -> tuple[nn.Module, GPT]:
     """Build GPT, move to device, optionally compile + DDP"""
-    gpt_cfg = GPTConfig(
-        init_policy=cfg.model.init_policy,
-        n_layer=cfg.model.n_layer,
-        n_head=cfg.model.n_head,
-        n_kv_head=cfg.model.n_kv_head,
-        n_embed=cfg.model.n_embed,
-        hidden_multiple=cfg.model.hidden_multiple,
-        vocab_size=cfg.model.vocab_size,
-        vocab_pad_multiple=cfg.model.vocab_pad_multiple,
-        block_size=cfg.model.block_size,
-        rope_theta=cfg.model.rope_theta,
-        tie_weights=cfg.model.tie_weights,
-        logit_softcap=cfg.model.logit_softcap,
-    )
+    gpt_cfg = build_gpt_config(cfg.model)
     raw_model = GPT(gpt_cfg)
     raw_model.to(device)
 
@@ -284,8 +289,9 @@ def _run_train_step(
     bad_param = detect_non_finite_grad(forward_model)
     if bad_param is not None:
         msg = (
-            f"Non-finite gradient at step {step} in '{bad_param}."
-            f"loss={float(loss_accum.item()):4.f}, grad_norm={float(grad_norm.item())}"
+            f"Non-finite gradient at step {step} in '{bad_param}'. "
+            f"loss={float(loss_accum.item()):.4f}, "
+            f"grad_norm={float(grad_norm.item()):.4f}"
         )
         if recovery.nan_grad_action == "halt":
             raise NonFiniteGradError(msg)
@@ -416,7 +422,24 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
             t0 = time.time()
             last_step = step == cfg.schedule.max_steps - 1
 
-            # ---- Periodic eval (val loss + eval suite); dt below includes this time ----
+            # ---- Training step ----
+            loss, grad_norm, lr = _run_train_step(
+                forward_model,
+                train_loader,
+                optimizer,
+                schedule,
+                dist_info,
+                profiler,
+                cfg.recovery,
+                step=step,
+                grad_accum_steps=grad_accum_steps,
+                grad_clip=cfg.grad_clip,
+                device=device,
+                device_type=device_type,
+                dtype=dtype,
+            )
+
+            # ---- Periodic eval (val loss + eval suite) ----
             if step % cfg.eval.interval == 0 or last_step:
                 with profiler.region("eval_val_loss"):
                     val_loss = _run_val_loss(
@@ -451,7 +474,7 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
                             logger.info(f"step {step}: {name}/{metric}={value:.4f}")
                     wb.log_metrics(eval_metrics, step=step)
 
-            # ---- Periodic sampling (skip step 0: untrained model produces noise) ----
+            # ---- Periodic sampling (skip step 0: the first update is still noise) ----
             if step > 0 and (step % cfg.eval.interval == 0 or last_step):
                 with profiler.region("sample"):
                     rng = torch.Generator(device=device).manual_seed(42 + dist_info.rank)
@@ -468,23 +491,6 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
                     last_samples = samples
                     for i, s in enumerate(samples):
                         logger.info(f"Step {step}: sample {i + 1}: {s}")
-
-            # ---- Training step ----
-            loss, grad_norm, lr = _run_train_step(
-                forward_model,
-                train_loader,
-                optimizer,
-                schedule,
-                dist_info,
-                profiler,
-                cfg.recovery,
-                step=step,
-                grad_accum_steps=grad_accum_steps,
-                grad_clip=cfg.grad_clip,
-                device=device,
-                device_type=device_type,
-                dtype=dtype,
-            )
 
             dt = time.time() - t0
             tokens_per_sec = cfg.total_batch_size / dt

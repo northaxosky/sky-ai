@@ -39,7 +39,7 @@ def test_gpt2_policy_keeps_current_model_init() -> None:
 
 def test_sky_ai_policy_uses_embedding_and_head_scales() -> None:
     torch.manual_seed(0)
-    model = GPT(_tiny_config(init_policy="skyai", tie_weights=False))
+    model = GPT(_tiny_config(init_policy="sky-ai", tie_weights=False))
 
     _assert_std(model.transformer.wte.weight, 0.8, rel=0.05)
     _assert_std(model.lm_head.weight, 0.001, rel=0.10)
@@ -47,7 +47,7 @@ def test_sky_ai_policy_uses_embedding_and_head_scales() -> None:
 
 def test_sky_ai_policy_keeps_tied_weights_on_compat_scale() -> None:
     torch.manual_seed(0)
-    model = GPT(_tiny_config(init_policy="skyai", tie_weights=True))
+    model = GPT(_tiny_config(init_policy="sky-ai", tie_weights=True))
 
     assert model.transformer.wte.weight.data_ptr() == model.lm_head.weight.data_ptr()
     _assert_std(model.transformer.wte.weight, 0.02, rel=0.10)
@@ -55,7 +55,7 @@ def test_sky_ai_policy_keeps_tied_weights_on_compat_scale() -> None:
 
 def test_sky_ai_policy_uses_width_scaled_inputs() -> None:
     torch.manual_seed(0)
-    cfg = _tiny_config(init_policy="skyai")
+    cfg = _tiny_config(init_policy="sky-ai")
     model = GPT(cfg)
     block = model.transformer.h[0]
 
@@ -68,7 +68,7 @@ def test_sky_ai_policy_uses_width_scaled_inputs() -> None:
 
 def test_sky_ai_policy_zeroes_residual_outputs() -> None:
     torch.manual_seed(0)
-    model = GPT(_tiny_config(init_policy="skyai"))
+    model = GPT(_tiny_config(init_policy="sky-ai"))
 
     for block in model.transformer.h:
         assert torch.count_nonzero(block.attn.c_proj.weight) == 0  # pyright: ignore

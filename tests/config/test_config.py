@@ -112,6 +112,7 @@ class TestSchema:
 
     def test_model_defaults_include_modern_arch_fields(self) -> None:
         cfg = RunConfig.model_validate(_valid_run_dict())
+        assert cfg.model.init_policy == "gpt2"
         assert cfg.model.n_kv_head is None
         assert cfg.model.hidden_multiple == 4
         assert cfg.model.rope_theta == 100_000.0
@@ -124,6 +125,7 @@ class TestSchema:
         d["model"].update(
             {
                 "n_kv_head": 1,
+                "init_policy": "sky-ai",
                 "hidden_multiple": 8,
                 "rope_theta": 10_000.0,
                 "vocab_pad_multiple": 256,
@@ -133,6 +135,7 @@ class TestSchema:
         )
         cfg = RunConfig.model_validate(d)
         assert cfg.model.n_kv_head == 1
+        assert cfg.model.init_policy == "sky-ai"
         assert cfg.model.hidden_multiple == 8
         assert cfg.model.rope_theta == 10_000.0
         assert cfg.model.vocab_pad_multiple == 256
@@ -227,11 +230,18 @@ class TestSchema:
         d["model"]["vocab_size"] = 50304  # gpt2 n_vocab + 47 (pad-to-128)
         cfg = RunConfig.model_validate(d)
         assert cfg.model.vocab_size == 50304
+        assert cfg.model.tokenizer_vocab_size == 50257
 
     def test_unknown_tokenizer_rejected(self) -> None:
         d = _valid_run_dict()
         d["model"]["tokenizer"] = "definitely-not-an-encoding"
         with pytest.raises(ValidationError, match="tokenizer"):
+            RunConfig.model_validate(d)
+
+    def test_unknown_init_policy_rejected(self) -> None:
+        d = _valid_run_dict()
+        d["model"]["init_policy"] = "nanochat"
+        with pytest.raises(ValidationError, match="init_policy"):
             RunConfig.model_validate(d)
 
     def test_vocab_above_alignment_padding_rejected(self) -> None:
@@ -409,6 +419,7 @@ class TestOverrides:
             path,
             overrides=[
                 "model.n_kv_head=1",
+                "model.init_policy=sky-ai",
                 "model.hidden_multiple=8",
                 "model.rope_theta=10000.0",
                 "model.vocab_pad_multiple=256",
@@ -417,6 +428,7 @@ class TestOverrides:
             ],
         )
         assert cfg.model.n_kv_head == 1
+        assert cfg.model.init_policy == "sky-ai"
         assert cfg.model.hidden_multiple == 8
         assert cfg.model.rope_theta == 10_000.0
         assert cfg.model.vocab_pad_multiple == 256

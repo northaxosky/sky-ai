@@ -20,7 +20,7 @@ def _pad_to_multiple(n: int, multiple: int) -> int:
 
 @dataclass
 class GPTConfig:
-    init_policy: Literal["gpt2", "skyai"] = "gpt2"
+    init_policy: Literal["gpt2", "sky-ai"] = "gpt2"
     block_size: int = 1024
     vocab_size: int = 50257
     n_layer: int = 12
@@ -85,7 +85,7 @@ class GPT(nn.Module):
 
         if config.init_policy == "gpt2":
             self.apply(lambda m: init_weights(m, n_layer=config.n_layer))
-        elif config.init_policy == "skyai":
+        elif config.init_policy == "sky-ai":
             init_sky_ai_weights(
                 wte=self.transformer.wte,
                 lm_head=self.lm_head,
@@ -122,11 +122,11 @@ class GPT(nn.Module):
             x = block(x, cos, sin)
 
         x = self.transformer.ln_f(x)
-        logits = self.lm_head(x)
+        logits = self.lm_head(x)[..., : self.config.vocab_size].float()
 
         if self.config.logit_softcap is not None:
             cap = self.config.logit_softcap
-            logits = cap * torch.tanh(logits.float() / cap)
+            logits = cap * torch.tanh(logits / cap)
 
         loss = None
         if targets is not None:

@@ -129,6 +129,16 @@ class _BatchLoader:
         pass
 
 
+class _NaNGradModel(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.weight = torch.nn.Parameter(torch.tensor(1.0))
+
+    def forward(self, x: torch.Tensor, y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        loss = self.weight * torch.tensor(float("nan"), device=x.device)
+        return x.float(), loss
+
+
 # ---- tests ----------------------------------------------------------------
 
 
@@ -226,6 +236,7 @@ class TestBuildModel:
         cfg = _tiny_cfg(tmp_path)
         model_cfg = cfg.model.model_copy(
             update={
+                "init_policy": "sky-ai",
                 "n_kv_head": 1,
                 "hidden_multiple": 8,
                 "rope_theta": 10_000.0,
@@ -243,12 +254,14 @@ class TestBuildModel:
         )
 
         assert forward_model is raw_model
+        assert raw_model.config.init_policy == "sky-ai"
         assert raw_model.config.n_kv_head == 1
         assert raw_model.config.hidden_multiple == 8
         assert raw_model.config.rope_theta == 10_000.0
         assert raw_model.config.vocab_pad_multiple == 256
         assert raw_model.config.tie_weights is True
         assert raw_model.config.logit_softcap is None
+        assert raw_model.config.vocab_size == 50257
         assert raw_model.config.vocab_size_padded == 50432
         assert raw_model.transformer.wte.weight.data_ptr() == raw_model.lm_head.weight.data_ptr()
 
@@ -365,6 +378,7 @@ class TestMaybeResume:
     @pytest.mark.parametrize(
         ("field", "value"),
         [
+            ("init_policy", "sky-ai"),
             ("n_kv_head", 1),
             ("hidden_multiple", 8),
             ("rope_theta", 10_000.0),
@@ -429,6 +443,30 @@ class TestRunTrainStep:
         assert torch.isfinite(torch.tensor(loss))
         assert torch.isfinite(torch.tensor(grad_norm))
         assert lr == pytest.approx(sched.lr_for(0))
+
+    def test_non_finite_grad_raises_project_error(self) -> None:
+        model = _NaNGradModel()
+        optim = build_optimizer(model, learning_rate=1e-3, weight_decay=0.0, device_type="cpu")
+        loader = _BatchLoader(vocab_size=128, batch_size=2, block_size=8)
+        sched = CosineSchedule(max_lr=1e-3, min_lr=1e-4, warmup_steps=1, max_steps=10)
+        dist_info = loop.DistInfo(rank=0, local_rank=0, world_size=1)
+
+        with pytest.raises(loop.NonFiniteGradError, match="Non-finite gradient"):
+            loop._run_train_step(
+                model,
+                loader,
+                optim,
+                sched,
+                dist_info,
+                _noop_profiler(),
+                RecoveryConfig(nan_grad_action="halt"),  # pyright: ignore
+                step=0,
+                grad_accum_steps=1,
+                grad_clip=1.0,
+                device="cpu",
+                device_type="cpu",
+                dtype=torch.float32,
+            )
 
     def test_overfits_a_fixed_batch(self) -> None:
         model = _tiny_gpt()

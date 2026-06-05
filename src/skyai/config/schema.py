@@ -28,7 +28,7 @@ def _tokenizer_vocab(name: str) -> int:
 class ModelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    init_policy: Literal["gpt2", "skyai"] = Field(
+    init_policy: Literal["gpt2", "sky-ai"] = Field(
         default="gpt2", description="Weight initialization policy"
     )
     n_layer: int = Field(gt=0, description="Number of transformer blocks")
@@ -49,6 +49,10 @@ class ModelConfig(BaseModel):
     logit_softcap: float | None = Field(
         default=15.0, gt=0.0, description="Optional tanh logit softcap"
     )
+
+    @property
+    def tokenizer_vocab_size(self) -> int:
+        return _tokenizer_vocab(self.tokenizer)
 
     @model_validator(mode="after")
     def _embed_divisible_by_head(self) -> ModelConfig:

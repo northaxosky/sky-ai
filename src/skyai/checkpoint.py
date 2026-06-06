@@ -282,14 +282,14 @@ def _rotate(root: Path, keep_last_n: int) -> None:
         manifest = p.with_suffix(".json")
         try:
             p.unlink()
-        except OSError:
-            logger.warning("Could not delete {p} ({e})")
+        except OSError as e:
+            logger.warning(f"Could not delete {p} ({e})")
         try:
             if manifest.is_file():
                 manifest.unlink()
-        except OSError:
-            logger.warning("Could not delete {manifest} ({e})")
-        logger.info("Rotated out {p.name}")
+        except OSError as e:
+            logger.warning(f"Could not delete {manifest} ({e})")
+        logger.info(f"Rotated out {p.name}")
 
 
 def _git_sha() -> str | None:

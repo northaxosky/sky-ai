@@ -1,0 +1,56 @@
+# Local 124M sanity config for Phase 7 modern-architecture validation.
+# Extends the historical V2 recipe but pins every modern model field explicitly.
+# Intended for a short 4090 run, not the final XL recipe.
+
+extends: base.yaml
+
+seed: 1337
+dtype: bfloat16
+compile: true
+total_batch_size: 524288  # 8 * 1024 * 64 grad-accum on one rank
+
+model:
+  n_layer: 12
+  n_head: 12
+  n_kv_head: null          # MHA baseline for first sanity run
+  n_embed: 768
+  hidden_multiple: 4
+  vocab_size: 50304        # current GPT-2 shards padded from tokenizer n_vocab=50257
+  vocab_pad_multiple: 128
+  block_size: 1024
+  rope_theta: 100000.0
+  tokenizer: gpt2
+  tie_weights: false
+  logit_softcap: 15.0
+  init_policy: gpt2
+
+data:
+  root: data/fineweb_gpt2
+  train_split: train
+  val_split: val
+  batch_size: 8            # safer 4090 microbatch; effective batch kept via grad accum
+
+schedule:
+  max_lr: 6.0e-4
+  min_lr: 6.0e-5
+  warmup_steps: 50
+  max_steps: 500
+
+eval:
+  interval: 100
+  val_steps: 10
+  evals: []
+  sample_prompt: "Hello, I'm a language model,"
+  sample_n: 2
+  sample_max_length: 32
+
+log:
+  dir: logs/skyai-124m-validate
+  level: INFO
+  wandb: false
+  wandb_project: skyai
+
+checkpoint:
+  dir: checkpoints/skyai-124m-validate
+  every_n_steps: 250
+  keep_last_n: 2

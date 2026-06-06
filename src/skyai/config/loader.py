@@ -90,4 +90,10 @@ def _parse_scalar(value: str) -> Any:
         return float(value)
     except ValueError:
         pass
+    try:
+        parsed = yaml.safe_load(value)
+    except yaml.YAMLError:
+        return value
+    if isinstance(parsed, (list, dict)):
+        return parsed
     return value

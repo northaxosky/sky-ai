@@ -142,6 +142,29 @@ class TestSchema:
         assert cfg.model.tie_weights is True
         assert cfg.model.logit_softcap is None
 
+    def test_optimizer_and_schedule_modern_defaults(self) -> None:
+        cfg = RunConfig.model_validate(_valid_run_dict())
+        assert cfg.optim.type == "adamw"
+        assert cfg.optim.embedding_lr == 0.3
+        assert cfg.optim.unembedding_lr == 0.008
+        assert cfg.optim.matrix_lr == 0.02
+        assert cfg.optim.muon_momentum == 0.95
+        assert cfg.optim.muon_beta2 == 0.9
+        assert cfg.optim.muon_ns_steps == 5
+        assert cfg.schedule.type == "cosine"
+        assert cfg.schedule.warmdown_ratio == 0.65
+        assert cfg.schedule.final_lr_frac == 0.05
+
+    def test_muon_split_and_wsd_config_accepted(self) -> None:
+        d = _valid_run_dict()
+        d["optim"].update({"type": "muon-split", "weight_decay": 0.28})
+        d["schedule"].update(
+            {"type": "warmup-stable-decay", "warmdown_ratio": 0.5, "final_lr_frac": 0.1}
+        )
+        cfg = RunConfig.model_validate(d)
+        assert cfg.optim.type == "muon-split"
+        assert cfg.schedule.type == "warmup-stable-decay"
+
     def test_n_kv_head_must_divide_n_head(self) -> None:
         d = _valid_run_dict()
         d["model"]["n_head"] = 6
@@ -194,6 +217,12 @@ class TestSchema:
         d["total_batch_size"] = 300
         with pytest.raises(ValidationError, match="total_batch_size"):
             RunConfig.model_validate(d)
+
+    def test_grad_clip_can_be_disabled(self) -> None:
+        d = _valid_run_dict()
+        d["grad_clip"] = None
+        cfg = RunConfig.model_validate(d)
+        assert cfg.grad_clip is None
 
     def test_top_level_typo_rejected(self) -> None:
         d = _valid_run_dict()
@@ -398,6 +427,11 @@ class TestOverrides:
         path = _write_yaml(tmp_path, "cfg.yaml", _full_yaml_body())
         cfg = load_config(path, overrides=["log.level=DEBUG"])
         assert cfg.log.level == "DEBUG"
+
+    def test_list_parse(self, tmp_path: Path) -> None:
+        path = _write_yaml(tmp_path, "cfg.yaml", _full_yaml_body())
+        cfg = load_config(path, overrides=["eval.evals=[]"])
+        assert cfg.eval.evals == []
 
     def test_multiple_overrides(self, tmp_path: Path) -> None:
         path = _write_yaml(tmp_path, "cfg.yaml", _full_yaml_body())

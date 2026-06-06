@@ -32,7 +32,7 @@ from skyai.training.recovery import (
     diagnose_oom,
     is_oom_error,
 )
-from skyai.training.schedule import CosineSchedule
+from skyai.training.schedule import CosineSchedule, WarmupStableDecaySchedule
 from skyai.wandb_logger import WandbLogger
 
 _DTYPE_MAP: dict[str, torch.dtype] = {
@@ -140,7 +140,7 @@ def _build_model(cfg: RunConfig, device: str, dist_info: DistInfo) -> tuple[nn.M
 
 def _build_components(
     cfg: RunConfig, dist_info: DistInfo, device: str
-) -> tuple[nn.Module, GPT, torch.optim.Optimizer, CosineSchedule, DataLoader, DataLoader, int]:
+) -> tuple[nn.Module, GPT, Any, Any, DataLoader, DataLoader, int]:
     """Build forward model, raw model, optimizer, schedule, train and val loader, grad_accum_steps"""
     grad_accum_steps = _compute_grad_accum(cfg, dist_info.world_size)
     forward_model, raw_model = _build_model(cfg, device, dist_info)
@@ -148,18 +148,36 @@ def _build_components(
     device_type = "cuda" if device.startswith("cuda") else "cpu"
     optimizer = build_optimizer(
         raw_model,
+        optimizer_type=cfg.optim.type,
         learning_rate=cfg.schedule.max_lr,
         weight_decay=cfg.optim.weight_decay,
         betas=cfg.optim.betas,
         eps=cfg.optim.eps,
         device_type=device_type,
+        total_batch_size=cfg.total_batch_size,
+        embedding_lr=cfg.optim.embedding_lr,
+        unembedding_lr=cfg.optim.unembedding_lr,
+        matrix_lr=cfg.optim.matrix_lr,
+        muon_momentum=cfg.optim.muon_momentum,
+        muon_beta2=cfg.optim.muon_beta2,
+        muon_ns_steps=cfg.optim.muon_ns_steps,
     )
-    schedule = CosineSchedule(
-        max_lr=cfg.schedule.max_lr,
-        min_lr=cfg.schedule.min_lr,
-        warmup_steps=cfg.schedule.warmup_steps,
-        max_steps=cfg.schedule.max_steps,
-    )
+    if cfg.schedule.type == "cosine":
+        schedule = CosineSchedule(
+            max_lr=cfg.schedule.max_lr,
+            min_lr=cfg.schedule.min_lr,
+            warmup_steps=cfg.schedule.warmup_steps,
+            max_steps=cfg.schedule.max_steps,
+        )
+    elif cfg.schedule.type == "warmup-stable-decay":
+        schedule = WarmupStableDecaySchedule(
+            warmup_steps=cfg.schedule.warmup_steps,
+            max_steps=cfg.schedule.max_steps,
+            warmdown_ratio=cfg.schedule.warmdown_ratio,
+            final_lr_frac=cfg.schedule.final_lr_frac,
+        )
+    else:
+        raise ValueError(f"Unknown schedule type {cfg.schedule.type!r}")
     train_loader = DataLoader(
         data_root=cfg.data.root,
         split=cfg.data.train_split,
@@ -243,15 +261,15 @@ def _maybe_resume(
 def _run_train_step(
     forward_model: nn.Module,
     train_loader: DataLoader,
-    optimizer: torch.optim.Optimizer,
-    schedule: CosineSchedule,
+    optimizer: Any,
+    schedule: CosineSchedule | WarmupStableDecaySchedule,
     dist_info: DistInfo,
     profiler: Profiler,
     recovery: RecoveryConfig,
     *,
     step: int,
     grad_accum_steps: int,
-    grad_clip: float,
+    grad_clip: float | None,
     device: str,
     device_type: str,
     dtype: torch.dtype,
@@ -284,7 +302,8 @@ def _run_train_step(
             dist.all_reduce(loss_accum, op=dist.ReduceOp.AVG)
 
     with profiler.region("grad_clip"):
-        grad_norm = torch.nn.utils.clip_grad_norm_(forward_model.parameters(), grad_clip)
+        max_norm = float("inf") if grad_clip is None else grad_clip
+        grad_norm = torch.nn.utils.clip_grad_norm_(forward_model.parameters(), max_norm)
 
     bad_param = detect_non_finite_grad(forward_model)
     if bad_param is not None:
@@ -299,9 +318,20 @@ def _run_train_step(
         optimizer.zero_grad()
         return float("nan"), float("nan"), schedule.lr_for(step)
 
-    lr = schedule.lr_for(step)
-    for pg in optimizer.param_groups:
-        pg["lr"] = lr
+    if isinstance(schedule, WarmupStableDecaySchedule):
+        lr_mult = schedule.multiplier_for(step)
+        for pg in optimizer.param_groups:
+            pg["lr"] = pg["initial_lr"] * lr_mult
+            if pg.get("optimizer_type") == "muon":
+                pg["momentum"] = schedule.muon_momentum_for(step)
+                pg["weight_decay"] = schedule.muon_weight_decay_for(
+                    step, base_weight_decay=pg["initial_weight_decay"]
+                )
+        lr = max(pg["lr"] for pg in optimizer.param_groups)
+    else:
+        lr = schedule.lr_for(step)
+        for pg in optimizer.param_groups:
+            pg["lr"] = lr
 
     with profiler.region("optimizer"):
         optimizer.step()
@@ -341,6 +371,27 @@ def _run_val_loss(
     if dist_info.is_ddp:
         dist.all_reduce(val_loss_accum, op=dist.ReduceOp.AVG)
     return float(val_loss_accum.item())
+
+
+def _format_lr_groups(optimizer: Any) -> str:
+    """Compact LR summary that keeps split optimizers interpretable."""
+    groups = getattr(optimizer, "param_groups", [])
+    if not groups:
+        return "lr=n/a"
+    if len(groups) == 1:
+        return f"lr={groups[0]['lr']:.4e}"
+
+    max_lr = max(group["lr"] for group in groups)
+    parts = [f"lr/max={max_lr:.4e}"]
+    wanted = ("embed", "lm_head")
+    for name in wanted:
+        group = next((g for g in groups if g.get("name") == name), None)
+        if group is not None:
+            parts.append(f"lr/{name}={group['lr']:.4e}")
+    muon_lrs = [g["lr"] for g in groups if g.get("optimizer_type") == "muon"]
+    if muon_lrs:
+        parts.append(f"lr/muon={max(muon_lrs):.4e}")
+    return " ".join(parts)
 
 
 def _build_metrics(
@@ -496,8 +547,9 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
             tokens_per_sec = cfg.total_batch_size / dt
             if dist_info.is_master:
                 if math.isfinite(loss):
+                    lr_summary = _format_lr_groups(optimizer)
                     logger.info(
-                        f"step {step}: loss={loss:.6f} lr={lr:.4e} "
+                        f"step {step}: loss={loss:.6f} {lr_summary} "
                         f"norm={grad_norm:.4f} dt={dt * 1000:.1f}ms tok/s={tokens_per_sec:.0f}"
                     )
                     wb.log_metrics(

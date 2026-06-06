@@ -110,18 +110,28 @@ class DataConfig(BaseModel):
 class OptimConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    type: Literal["adamw", "muon-split"] = "adamw"
     weight_decay: float = Field(ge=0.0)
     betas: tuple[float, float] = (0.9, 0.95)
     eps: float = Field(default=1e-8, gt=0.0)
+    embedding_lr: float = Field(default=0.3, gt=0.0)
+    unembedding_lr: float = Field(default=0.008, gt=0.0)
+    matrix_lr: float = Field(default=0.02, gt=0.0)
+    muon_momentum: float = Field(default=0.95, gt=0.0, lt=1.0)
+    muon_beta2: float = Field(default=0.9, ge=0.0, lt=1.0)
+    muon_ns_steps: int = Field(default=5, ge=1)
 
 
 class ScheduleConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    type: Literal["cosine", "warmup-stable-decay"] = "cosine"
     max_lr: float = Field(gt=0.0)
     min_lr: float = Field(ge=0.0)
     warmup_steps: int = Field(ge=0)
     max_steps: int = Field(gt=0)
+    warmdown_ratio: float = Field(default=0.65, ge=0.0, le=1.0)
+    final_lr_frac: float = Field(default=0.05, ge=0.0, le=1.0)
 
     @model_validator(mode="after")
     def _ordering(self) -> ScheduleConfig:
@@ -208,7 +218,7 @@ class RunConfig(BaseModel):
     seed: int = 42
     dtype: Literal["bfloat16", "float16", "float32"] = "bfloat16"
     compile: bool = False
-    grad_clip: float = Field(default=1.0, gt=0.0)
+    grad_clip: float | None = Field(default=1.0, gt=0.0)
     total_batch_size: int = Field(gt=0, description="Effective batch size in TOKENS")
 
     model: ModelConfig

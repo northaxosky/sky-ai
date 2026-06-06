@@ -6,8 +6,9 @@ import pytest
 import torch
 import torch.nn as nn
 
-from skyai.training.optimizer import build_optimizer
-from skyai.training.schedule import CosineSchedule
+from skyai.nn.model import GPT, GPTConfig
+from skyai.training.optimizer import Muon, OptimizerChain, build_optimizer
+from skyai.training.schedule import CosineSchedule, WarmupStableDecaySchedule
 
 
 class TestCosineSchedule:
@@ -160,3 +161,92 @@ class TestBuildOptimizer:
         # On torch versions that expose 'fused', the default is None when we
         # didn't pass it. Either way we must not have opted into True.
         assert opt.defaults.get("fused") is not True
+
+    def test_muon_rejects_non_matrix_param(self) -> None:
+        param = nn.Parameter(torch.ones(8))
+        param.grad = torch.ones_like(param)
+        opt = Muon([param], lr=1e-3)
+        with pytest.raises(ValueError, match="2D"):
+            opt.step()
+
+    def test_muon_updates_matrix_param(self) -> None:
+        param = nn.Parameter(torch.randn(8, 8))
+        param.grad = torch.randn_like(param)
+        before = param.detach().clone()
+        opt = Muon([param], lr=1e-3)
+        opt.step()
+        assert not torch.equal(param, before)
+
+    def test_muon_split_returns_optimizer_chain(self) -> None:
+        model = GPT(
+            GPTConfig(
+                block_size=16,
+                vocab_size=128,
+                n_layer=2,
+                n_head=4,
+                n_embed=64,
+                logit_softcap=None,
+            )
+        )
+        opt = build_optimizer(
+            model,
+            optimizer_type="muon-split",
+            learning_rate=1e-3,
+            weight_decay=0.28,
+            device_type="cpu",
+        )
+        assert isinstance(opt, OptimizerChain)
+        assert any(group.get("optimizer_type") == "muon" for group in opt.param_groups)
+
+        grouped = [p for group in opt.param_groups for p in group["params"]]
+        assert len({id(p) for p in grouped}) == len(grouped)
+        assert {id(p) for p in grouped} == {id(p) for p in model.parameters() if p.requires_grad}
+
+    def test_muon_split_omits_lm_head_when_tied(self) -> None:
+        model = GPT(
+            GPTConfig(
+                block_size=16,
+                vocab_size=128,
+                n_layer=2,
+                n_head=4,
+                n_embed=64,
+                tie_weights=True,
+                logit_softcap=None,
+            )
+        )
+        opt = build_optimizer(
+            model,
+            optimizer_type="muon-split",
+            learning_rate=1e-3,
+            weight_decay=0.28,
+            device_type="cpu",
+        )
+        grouped = [p for group in opt.param_groups for p in group["params"]]
+        assert sum(1 for p in grouped if p is model.transformer.wte.weight) == 1
+
+
+class TestWarmupStableDecaySchedule:
+    def test_warmup_starts_at_first_increment(self) -> None:
+        sched = WarmupStableDecaySchedule(warmup_steps=10, max_steps=100)
+        assert sched.multiplier_for(0) == pytest.approx(0.1)
+
+    def test_plateau_holds_at_one(self) -> None:
+        sched = WarmupStableDecaySchedule(warmup_steps=10, max_steps=100, warmdown_ratio=0.2)
+        assert sched.multiplier_for(20) == pytest.approx(1.0)
+
+    def test_final_step_hits_final_fraction(self) -> None:
+        sched = WarmupStableDecaySchedule(
+            warmup_steps=10, max_steps=100, warmdown_ratio=0.2, final_lr_frac=0.05
+        )
+        assert sched.multiplier_for(99) == pytest.approx(0.05)
+
+    def test_muon_momentum_warms_and_decays(self) -> None:
+        sched = WarmupStableDecaySchedule(warmup_steps=10, max_steps=1000, warmdown_ratio=0.2)
+        assert sched.muon_momentum_for(0) == pytest.approx(0.85)
+        assert sched.muon_momentum_for(400) == pytest.approx(0.97)
+        assert sched.muon_momentum_for(999) == pytest.approx(0.90)
+
+    def test_muon_weight_decay_cosines_to_zero(self) -> None:
+        sched = WarmupStableDecaySchedule(warmup_steps=10, max_steps=100)
+        assert sched.muon_weight_decay_for(0, 0.28) == pytest.approx(0.28)
+        assert sched.muon_weight_decay_for(100, 0.28) == pytest.approx(0.0)

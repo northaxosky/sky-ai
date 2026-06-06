@@ -231,6 +231,30 @@ class TestSetSeeds:
         assert torch.equal(a, b)
 
 
+class TestFormatLrGroups:
+    def test_single_group(self) -> None:
+        optim = type("Opt", (), {"param_groups": [{"lr": 1e-3}]})()
+        assert loop._format_lr_groups(optim) == "lr=1.0000e-03"
+
+    def test_split_groups(self) -> None:
+        optim = type(
+            "Opt",
+            (),
+            {
+                "param_groups": [
+                    {"name": "embed", "lr": 0.3},
+                    {"name": "lm_head", "lr": 0.008},
+                    {"name": "muon_64x64", "optimizer_type": "muon", "lr": 0.02},
+                ]
+            },
+        )()
+        summary = loop._format_lr_groups(optim)
+        assert "lr/max=3.0000e-01" in summary
+        assert "lr/embed=3.0000e-01" in summary
+        assert "lr/lm_head=8.0000e-03" in summary
+        assert "lr/muon=2.0000e-02" in summary
+
+
 class TestBuildModel:
     def test_threads_modern_arch_fields(self, tmp_path: Path) -> None:
         cfg = _tiny_cfg(tmp_path)

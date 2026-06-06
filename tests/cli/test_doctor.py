@@ -23,6 +23,7 @@ from skyai.cli.doctor import (
     _check_wandb,
     _check_wandb_auth,
     _check_world_size_divisibility,
+    _estimate_model_params,
     run_doctor,
 )
 from skyai.cli.main import app
@@ -265,6 +266,12 @@ class TestDataShards:
 
 
 class TestCheckpointDir:
+    def test_model_param_estimate_matches_modern_shapes(self, tmp_path):
+        cfg_path = _minimal_cfg(tmp_path, tmp_path / "data")
+        cfg = load_config(cfg_path, overrides=[])
+
+        assert _estimate_model_params(cfg.model) == 6_569_984
+
     def test_creates_and_passes(self, tmp_path):
         cfg_path = _minimal_cfg(tmp_path, tmp_path / "data")
         cfg = load_config(cfg_path, overrides=[])

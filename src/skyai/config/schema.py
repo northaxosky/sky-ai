@@ -60,6 +60,9 @@ class ModelConfig(BaseModel):
             raise ValueError(
                 f"n_embed ({self.n_embed}) must be divisible by n_head ({self.n_head})"
             )
+        head_dim = self.n_embed // self.n_head
+        if head_dim % 2 != 0:
+            raise ValueError(f"head_dim ({head_dim}) must be even for RoPE")
         return self
 
     @model_validator(mode="after")

@@ -162,6 +162,13 @@ class TestSchema:
         with pytest.raises(ValidationError, match="n_embed"):
             RunConfig.model_validate(d)
 
+    def test_model_head_dim_must_be_even_for_rope(self) -> None:
+        d = _valid_run_dict()
+        d["model"]["n_head"] = 2
+        d["model"]["n_embed"] = 66
+        with pytest.raises(ValidationError, match="head_dim"):
+            RunConfig.model_validate(d)
+
     def test_schedule_min_lr_above_max_lr(self) -> None:
         d = _valid_run_dict()
         d["schedule"]["min_lr"] = 1.0e-2

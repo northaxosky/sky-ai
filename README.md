@@ -36,7 +36,7 @@ src/skyai/      model, tokenizer, harness (cli/, config/, data/, eval/, training
 notebooks/      prereq explorations and post-train sanity checks
 journal/        module-by-module learning notes
 tests/          shape + gradient unit tests, end-to-end smoke, golden numerics fixture
-scripts/        fineweb.py + hellaswag.py (one-time data prep)
+scripts/        shard_text.py + hellaswag.py (one-time data prep)
 configs/        run configs (base.yaml is the V2 production config)
 data/           token shards (gitignored)
 checkpoints/    saved models (gitignored)

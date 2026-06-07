@@ -1,16 +1,18 @@
 """
-Tokenize FineWeb-Edu and write sharded numpy files for training.
+Tokenize a HuggingFace text dataset and write sharded numpy files for training.
 
-Default behavior reproduces Karpathy's build-nanogpt setup: 100 shards of
-~100M tokens each, GPT-2 BPE, uint16 packing, first shard goes to val.
+Default behavior reproduces Karpathy's build-nanogpt setup on FineWeb-Edu:
+100 shards of ~100M tokens each, GPT-2 BPE, uint16 packing, first shard goes
+to val.
 
 For wider tokenizers (cl100k_base, o200k_base), the shard dtype widens to
 uint32 automatically based on encoder.n_vocab.
 
 Usage:
-    uv run python scripts/fineweb.py                          # gpt2, full 10B run
-    uv run python scripts/fineweb.py --max-shards 1           # local validation
-    uv run python scripts/fineweb.py --tokenizer cl100k_base  # Phase 7 SkyAI-XL
+    uv run python scripts/shard_text.py                          # gpt2, full 10B run
+    uv run python scripts/shard_text.py --max-shards 1           # local validation
+    uv run python scripts/shard_text.py --tokenizer cl100k_base  # cl100k shards
+    uv run python scripts/shard_text.py --dataset karpathy/climbmix-400b-shuffle --remote-name "" --streaming --tokenizer cl100k_base --output-dir data/climbmix_cl100k --prefix climbmix
 """
 
 from __future__ import annotations
@@ -46,19 +48,21 @@ def _dtype_for_vocab(n_vocab: int) -> np.dtype:
 enc = tiktoken.get_encoding("gpt2")
 eot = enc._special_tokens["<|endoftext|>"]
 shard_dtype = _dtype_for_vocab(enc.n_vocab)
+active_text_column = "text"
 
 
-def _init_tokenizer(tokenizer_name: str) -> None:
-    """Set the module-level encoder, EOT id, and shard dtype."""
-    global enc, eot, shard_dtype
+def _init_worker(tokenizer_name: str, text_column: str = "text") -> None:
+    """Set worker-side tokenizer and text column state."""
+    global enc, eot, shard_dtype, active_text_column
     enc = tiktoken.get_encoding(tokenizer_name)
     eot = enc._special_tokens["<|endoftext|>"]
     shard_dtype = _dtype_for_vocab(enc.n_vocab)
+    active_text_column = text_column
 
 
 def tokenize(doc: dict) -> np.ndarray:
     tokens = [eot]
-    tokens.extend(enc.encode_ordinary(doc["text"]))
+    tokens.extend(enc.encode_ordinary(doc[active_text_column]))
     arr = np.array(tokens)
     assert (arr >= 0).all() and (arr < enc.n_vocab).all(), (
         f"token id out of range for tokenizer (n_vocab={enc.n_vocab})"
@@ -77,9 +81,34 @@ def parse_args() -> argparse.Namespace:
         description="Tokenize FineWeb-Edu and write sharded numpy files for training."
     )
     parser.add_argument(
+        "--dataset",
+        default="HuggingFaceFW/fineweb-edu",
+        help="HF dataset id (default: HuggingFaceFW/fineweb-edu)",
+    )
+    parser.add_argument(
         "--remote-name",
         default="sample-10BT",
-        help="HF dataset config name (default: sample-10BT, the 10B-token sample)",
+        help="HF dataset config/name. Use empty string for datasets without a config.",
+    )
+    parser.add_argument(
+        "--split",
+        default="train",
+        help="HF dataset split to tokenize (default: train)",
+    )
+    parser.add_argument(
+        "--text-column",
+        default="text",
+        help="Text column name in the HF dataset rows (default: text)",
+    )
+    parser.add_argument(
+        "--streaming",
+        action="store_true",
+        help="Stream dataset rows instead of downloading the full dataset index first.",
+    )
+    parser.add_argument(
+        "--prefix",
+        default="edufineweb",
+        help="Shard filename prefix (default: edufineweb)",
     )
     parser.add_argument(
         "--shard-size",
@@ -107,21 +136,27 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def shard_path(output_dir: Path, shard_index: int) -> Path:
+def shard_path(output_dir: Path, shard_index: int, prefix: str = "edufineweb") -> Path:
     split = "val" if shard_index == 0 else "train"
-    return output_dir / f"edufineweb_{split}_{shard_index:06d}"
+    return output_dir / f"{prefix}_{split}_{shard_index:06d}"
 
 
 def main() -> None:
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
-    _init_tokenizer(args.tokenizer)
+    _init_worker(args.tokenizer, args.text_column)
 
-    fw = load_dataset("HuggingFaceFW/fineweb-edu", name=args.remote_name, split="train")
+    dataset_kwargs = {"split": args.split, "streaming": args.streaming}
+    remote_name = args.remote_name or None
+    if remote_name is not None:
+        dataset_kwargs["name"] = remote_name
+    fw = load_dataset(args.dataset, **dataset_kwargs)
     nprocs = max(1, (os.cpu_count() or 2) // 2)
 
-    with mp.Pool(nprocs, initializer=_init_tokenizer, initargs=(args.tokenizer,)) as pool:
+    with mp.Pool(
+        nprocs, initializer=_init_worker, initargs=(args.tokenizer, args.text_column)
+    ) as pool:
         shard_index = 0
         buffer = np.empty((args.shard_size,), dtype=shard_dtype)
         token_count = 0
@@ -146,7 +181,7 @@ def main() -> None:
                 progress.update(remainder)
                 progress.close()
                 progress = None
-            write_shard(shard_path(args.output_dir, shard_index), buffer)
+            write_shard(shard_path(args.output_dir, shard_index, prefix=args.prefix), buffer)
             shard_index += 1
 
             if args.max_shards and shard_index >= args.max_shards:
@@ -163,7 +198,9 @@ def main() -> None:
         if token_count > 0:
             if progress is not None:
                 progress.close()
-            write_shard(shard_path(args.output_dir, shard_index), buffer[:token_count])
+            write_shard(
+                shard_path(args.output_dir, shard_index, prefix=args.prefix), buffer[:token_count]
+            )
 
 
 if __name__ == "__main__":

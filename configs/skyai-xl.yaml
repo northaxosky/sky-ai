@@ -1,3 +1,6 @@
+## First SkyAI-XL config: ~1.5B modern decoder on 8x H100.
+## Data is expected to be tokenized from ClimbMix with scripts/shard_text.py.
+
 seed: 1337
 dtype: bfloat16
 compile: true
@@ -20,8 +23,8 @@ model:
   init_policy: sky-ai
 
 data:
-  root: data/fineweb_cl100k
-  train_split: train_split
+  root: data/climbmix_cl100k
+  train_split: train
   val_split: val
   batch_size: 16
 

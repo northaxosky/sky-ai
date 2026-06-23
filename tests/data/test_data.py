@@ -40,18 +40,14 @@ class TestLoadTokens:
 
 class TestDataLoader:
     def test_batch_shape(self, synthetic_shards: Path) -> None:
-        loader = DataLoader(
-            synthetic_shards, split="train", batch_size=2, block_size=4
-        )
+        loader = DataLoader(synthetic_shards, split="train", batch_size=2, block_size=4)
         x, y = loader.next_batch()
-        
+
         assert x.shape == (2, 4)
         assert y.shape == (2, 4)
 
     def test_targets_are_inputs_shifted_by_one(self, synthetic_shards: Path) -> None:
-        loader = DataLoader(
-            synthetic_shards, split="train", batch_size=2, block_size=4
-        )
+        loader = DataLoader(synthetic_shards, split="train", batch_size=2, block_size=4)
         x, y = loader.next_batch()
 
         flat_x = x.flatten()
@@ -62,12 +58,10 @@ class TestDataLoader:
 
     def test_per_rank_offset_yields_disjoint_data(self, synthetic_shards: Path) -> None:
         rank0 = DataLoader(
-            synthetic_shards, split="train", batch_size=2, block_size=4,
-            rank=0, world_size=2
+            synthetic_shards, split="train", batch_size=2, block_size=4, rank=0, world_size=2
         )
         rank1 = DataLoader(
-            synthetic_shards, split="train", batch_size=2, block_size=4,
-            rank=1, world_size=2
+            synthetic_shards, split="train", batch_size=2, block_size=4, rank=1, world_size=2
         )
         x0, _ = rank0.next_batch()
         x1, _ = rank1.next_batch()
@@ -77,9 +71,7 @@ class TestDataLoader:
 
     def test_shard_rotation_wraps(self, synthetic_shards: Path) -> None:
         # Each shard has 1000 tokens: B * T = 8 each step
-        loader = DataLoader(
-            synthetic_shards, split="train", batch_size=2, block_size=4
-        )
+        loader = DataLoader(synthetic_shards, split="train", batch_size=2, block_size=4)
         starts = [0]
         for _ in range(500):
             loader.next_batch()
@@ -89,9 +81,7 @@ class TestDataLoader:
         assert set(starts) == {0, 1}
 
     def test_state_dict_roundtrip(self, synthetic_shards: Path) -> None:
-        loader = DataLoader(
-            synthetic_shards, split="train", batch_size=2, block_size=4
-        )
+        loader = DataLoader(synthetic_shards, split="train", batch_size=2, block_size=4)
 
         # Advance a few batches to non-zero state
         for _ in range(3):
@@ -100,9 +90,7 @@ class TestDataLoader:
         expected_batch = loader.next_batch()
 
         # Fresh loader, restore, and verify we get the correct next batch
-        fresh = DataLoader(
-            synthetic_shards, split="train", batch_size=2, block_size=4
-        )
+        fresh = DataLoader(synthetic_shards, split="train", batch_size=2, block_size=4)
         fresh.load_state_dict(saved_state)
         actual_batch = fresh.next_batch()
 
@@ -114,12 +102,20 @@ class TestDataLoader:
         # synthetic_shards train: 2 shards * 1000 tokens. B*T = 8.
         # world_size*B*T = 16, so rotation should occur near pos ~= 984.
         rank0 = DataLoader(
-            synthetic_shards, split="train", batch_size=2, block_size=4,
-            rank=0, world_size=2,
+            synthetic_shards,
+            split="train",
+            batch_size=2,
+            block_size=4,
+            rank=0,
+            world_size=2,
         )
         rank1 = DataLoader(
-            synthetic_shards, split="train", batch_size=2, block_size=4,
-            rank=1, world_size=2,
+            synthetic_shards,
+            split="train",
+            batch_size=2,
+            block_size=4,
+            rank=1,
+            world_size=2,
         )
         for step in range(200):
             rank0.next_batch()
@@ -133,24 +129,36 @@ class TestDataLoader:
         """A resumed nonzero rank must continue from the same place as the
         same rank that ran straight through"""
         reference = DataLoader(
-            synthetic_shards, split="train", batch_size=2, block_size=4,
-            rank=1, world_size=2,
+            synthetic_shards,
+            split="train",
+            batch_size=2,
+            block_size=4,
+            rank=1,
+            world_size=2,
         )
         for _ in range(5):
             reference.next_batch()
         expected_x, expected_y = reference.next_batch()
 
         rank0 = DataLoader(
-            synthetic_shards, split="train", batch_size=2, block_size=4,
-            rank=0, world_size=2,
+            synthetic_shards,
+            split="train",
+            batch_size=2,
+            block_size=4,
+            rank=0,
+            world_size=2,
         )
         for _ in range(5):
             rank0.next_batch()
         saved = rank0.state_dict()
 
         fresh_rank1 = DataLoader(
-            synthetic_shards, split="train", batch_size=2, block_size=4,
-            rank=1, world_size=2,
+            synthetic_shards,
+            split="train",
+            batch_size=2,
+            block_size=4,
+            rank=1,
+            world_size=2,
         )
         fresh_rank1.load_state_dict(saved)
         actual_x, actual_y = fresh_rank1.next_batch()
@@ -159,9 +167,7 @@ class TestDataLoader:
         assert torch.equal(actual_y, expected_y)
 
     def test_reset_returns_to_start(self, synthetic_shards: Path) -> None:
-        loader = DataLoader(
-            synthetic_shards, split="train", batch_size=2, block_size=4
-        )
+        loader = DataLoader(synthetic_shards, split="train", batch_size=2, block_size=4)
         first_batch = loader.next_batch()
         for _ in range(5):
             loader.next_batch()
@@ -172,15 +178,12 @@ class TestDataLoader:
 
     def test_rejects_invalid_split(self, synthetic_shards: Path) -> None:
         with pytest.raises(ValueError, match="Split must be"):
-            DataLoader(
-                synthetic_shards, split="test", batch_size=2, block_size=4
-            )
-    
+            DataLoader(synthetic_shards, split="test", batch_size=2, block_size=4)
+
     def test_rejects_invalid_rank(self, synthetic_shards: Path) -> None:
         with pytest.raises(ValueError, match="Rank must be in"):
             DataLoader(
-                synthetic_shards, split="train", batch_size=2, block_size=4,
-                rank=3, world_size=2
+                synthetic_shards, split="train", batch_size=2, block_size=4, rank=3, world_size=2
             )
 
     def test_raises_when_no_shards_found(self, tmp_path: Path) -> None:

@@ -25,11 +25,11 @@ env/
 .ipynb_checkpoints/
 
 # Training artifacts (large files, untracked output)
-data/
-checkpoints/
-runs/
-wandb/
-logs/
+/data/
+/checkpoints/
+/runs/
+/wandb/
+/logs/
 *.bin
 *.pt
 *.safetensors

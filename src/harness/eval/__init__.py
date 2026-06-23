@@ -6,9 +6,9 @@ import tiktoken
 import torch
 from torch import nn
 
-from skyai.eval.hellaswag import evaluate_hellaswag
-from skyai.eval.lambada import evaluate_lambada
-from skyai.eval.result import EvalFn, EvalResult
+from harness.eval.hellaswag import evaluate_hellaswag
+from harness.eval.lambada import evaluate_lambada
+from harness.eval.result import EvalFn, EvalResult
 
 EVALS: dict[str, EvalFn] = {
     "hellaswag": evaluate_hellaswag,

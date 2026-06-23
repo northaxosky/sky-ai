@@ -2,7 +2,7 @@
 
 import torch
 
-from skyai.nn.flash import attention
+from skyai.flash import attention
 
 
 def test_attention_shape_preserves_mha():

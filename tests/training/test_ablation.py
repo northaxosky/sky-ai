@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 import yaml
 
-from skyai.ablation import (
+from harness.ablation import (
     AblationSpec,
     Variant,
     VariantResult,
@@ -198,7 +198,7 @@ class TestRunAblation:
             called.append(cfg)
             return {"final_val_loss": 1.0}
 
-        monkeypatch.setattr("skyai.training.loop.train", fake_train)
+        monkeypatch.setattr("harness.training.loop.train", fake_train)
 
         results = run_ablation(spec_path, tmp_path / "out", dry_run=True)
         assert len(results) == 2
@@ -217,7 +217,7 @@ class TestRunAblation:
             seen_weight_decays.append(cfg.optim.weight_decay)
             return {"final_val_loss": 3.0 + cfg.optim.weight_decay}
 
-        monkeypatch.setattr("skyai.training.loop.train", fake_train)
+        monkeypatch.setattr("harness.training.loop.train", fake_train)
 
         out = tmp_path / "out"
         results = run_ablation(spec_path, out)
@@ -243,7 +243,7 @@ class TestRunAblation:
                 raise RuntimeError("simulated NaN halt")
             return {"final_val_loss": 3.0}
 
-        monkeypatch.setattr("skyai.training.loop.train", fake_train)
+        monkeypatch.setattr("harness.training.loop.train", fake_train)
 
         results = run_ablation(spec_path, tmp_path / "out")
         statuses = [r.status for r in results]
@@ -272,7 +272,7 @@ class TestRunAblation:
             train_calls.append(cfg.optim.weight_decay)
             return {"final_val_loss": 3.0}
 
-        monkeypatch.setattr("skyai.training.loop.train", fake_train)
+        monkeypatch.setattr("harness.training.loop.train", fake_train)
 
         results = run_ablation(spec_path, tmp_path / "out")
         # First variant skipped, second ran fresh
@@ -303,7 +303,7 @@ class TestRunAblation:
             train_calls.append(cfg.optim.weight_decay)
             return {"final_val_loss": 1.0}
 
-        monkeypatch.setattr("skyai.training.loop.train", fake_train)
+        monkeypatch.setattr("harness.training.loop.train", fake_train)
 
         results = run_ablation(spec_path, tmp_path / "out", force=True)
         assert train_calls == [0.0]
@@ -327,7 +327,7 @@ class TestRunAblation:
             seen_cfg.append(cfg)
             return {"final_val_loss": 1.0}
 
-        monkeypatch.setattr("skyai.training.loop.train", fake_train)
+        monkeypatch.setattr("harness.training.loop.train", fake_train)
 
         out = tmp_path / "out"
         run_ablation(spec_path, out)

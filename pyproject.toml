@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-skyai = "skyai.cli.main:app"
+skyai = "harness.cli.main:app"
 
 [dependency-groups]
 dev = [
@@ -48,7 +48,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/skyai"]
+packages = ["src/skyai", "src/harness", "src/gpt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -57,6 +57,9 @@ markers = [
     "slow: tests that download large files or take >5 seconds (deselect with -m 'not slow')",
 ]
 addopts = ["-m", "not slow"]
+
+[tool.coverage.run]
+source_pkgs = ["skyai", "harness", "gpt"]
 
 [tool.ruff]
 line-length = 100

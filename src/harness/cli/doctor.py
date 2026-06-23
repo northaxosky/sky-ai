@@ -12,8 +12,8 @@ from typing import Literal
 
 import typer
 
-from skyai.config.loader import load_config
-from skyai.config.schema import ModelConfig, RunConfig
+from harness.config.loader import load_config
+from harness.config.schema import ModelConfig, RunConfig
 
 Status = Literal["OK", "WARN", "FAIL"]
 CheckResult = tuple[Status, str]

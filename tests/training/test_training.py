@@ -6,9 +6,9 @@ import pytest
 import torch
 import torch.nn as nn
 
-from skyai.nn.model import GPT, GPTConfig
-from skyai.training.optimizer import Muon, OptimizerChain, build_optimizer
-from skyai.training.schedule import CosineSchedule, WarmupStableDecaySchedule
+from harness.training.optimizer import Muon, OptimizerChain, build_optimizer
+from harness.training.schedule import CosineSchedule, WarmupStableDecaySchedule
+from skyai.model import GPT, GPTConfig
 
 
 class TestCosineSchedule:

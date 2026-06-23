@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 
-from skyai.nn.layers import Linear, ResidualProjection, RMSNorm
+from skyai.layers import Linear, ResidualProjection, RMSNorm
 
 
 def test_rmsnorm_unit_rms():

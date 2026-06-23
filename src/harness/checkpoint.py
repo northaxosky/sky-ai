@@ -16,8 +16,8 @@ from typing import Any, Protocol
 import numpy as np
 import torch
 
-from skyai.config.schema import RunConfig
-from skyai.log import get_logger
+from harness.config.schema import RunConfig
+from harness.log import get_logger
 
 logger = get_logger(__name__)
 

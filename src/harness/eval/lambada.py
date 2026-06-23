@@ -11,8 +11,8 @@ from datasets import load_dataset
 from torch import nn
 from torch.nn import functional as F
 
-from skyai.eval.result import EvalResult
-from skyai.log import get_logger
+from harness.eval.result import EvalResult
+from harness.log import get_logger
 
 logger = get_logger(__name__)
 

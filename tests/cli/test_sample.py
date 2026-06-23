@@ -1,4 +1,4 @@
-"""Tests for skyai.sample.sample (multi-sample generation helper)"""
+"""Tests for harness.sample.sample (multi-sample generation helper)"""
 
 from __future__ import annotations
 
@@ -6,8 +6,8 @@ import pytest
 import tiktoken
 import torch
 
-from skyai.nn.model import GPT, GPTConfig
-from skyai.sample import sample
+from harness.sample import sample
+from skyai.model import GPT, GPTConfig
 
 
 @pytest.fixture(scope="module")
@@ -54,7 +54,7 @@ class TestSample:
             pad = torch.zeros((x.size(0), max_new_tokens), dtype=torch.long, device=x.device)
             return torch.cat([x, pad], dim=1)
 
-        import skyai.sample as sm
+        import harness.sample as sm
 
         monkeypatch.setattr(sm, "generate", fake_generate)
 

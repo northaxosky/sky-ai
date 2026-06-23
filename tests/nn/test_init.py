@@ -2,9 +2,9 @@ import pytest
 import torch
 import torch.nn as nn
 
-from skyai.nn.init import init_weights
-from skyai.nn.layers import Linear, ResidualProjection
-from skyai.nn.model import GPT, GPTConfig
+from skyai.init import init_weights
+from skyai.layers import Linear, ResidualProjection
+from skyai.model import GPT, GPTConfig
 
 
 def _tiny_config(**overrides) -> GPTConfig:
@@ -109,7 +109,7 @@ def test_bias_is_zeroed_when_present():
 
 
 def test_rmsnorm_is_unaffected():
-    from skyai.nn.layers import RMSNorm
+    from skyai.layers import RMSNorm
 
     norm = RMSNorm(128)
     init_weights(norm, n_layer=12)

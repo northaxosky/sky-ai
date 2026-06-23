@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from skyai.config.schema import RunConfig
+from harness.config.schema import RunConfig
 
 
 def load_config(path: str | Path, overrides: list[str] | None = None) -> RunConfig:

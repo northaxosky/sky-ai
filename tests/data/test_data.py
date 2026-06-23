@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 import torch
 
-from skyai.data.loader import DataLoader, load_tokens
+from harness.data.loader import DataLoader, load_tokens
 
 
 class TestLoadTokens:

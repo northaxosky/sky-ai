@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 import torch
 
-from skyai.checkpoint import (
+from harness.checkpoint import (
     CheckpointBundle,
     latest_checkpoint,
     list_checkpoints,
@@ -18,7 +18,7 @@ from skyai.checkpoint import (
     restore_rng,
     save_checkpoint,
 )
-from skyai.config.schema import RunConfig
+from harness.config.schema import RunConfig
 
 
 class _TinyModel(torch.nn.Module):
@@ -354,7 +354,7 @@ class TestProvenance:
 
     def test_git_sha_none_when_subprocess_fails(self, save_kwargs: dict[str, Any]) -> None:
         with patch(
-            "skyai.checkpoint.subprocess.run",
+            "harness.checkpoint.subprocess.run",
             side_effect=FileNotFoundError("git not installed"),
         ):
             save_checkpoint(step=1, **save_kwargs)

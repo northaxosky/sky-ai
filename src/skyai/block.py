@@ -5,9 +5,9 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-from skyai.nn.attention import CausalSelfAttention
-from skyai.nn.layers import RMSNorm
-from skyai.nn.mlp import MLP
+from skyai.attention import CausalSelfAttention
+from skyai.layers import RMSNorm
+from skyai.mlp import MLP
 
 
 class Block(nn.Module):

@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 import torch
 
-from skyai.checkpoint import save_checkpoint
-from skyai.config.schema import (
+from harness.checkpoint import save_checkpoint
+from harness.config.schema import (
     CheckpointConfig,
     DataConfig,
     EvalConfig,
@@ -20,11 +20,11 @@ from skyai.config.schema import (
     RunConfig,
     ScheduleConfig,
 )
-from skyai.nn.model import GPT, GPTConfig
-from skyai.training import loop
-from skyai.training.optimizer import build_optimizer
-from skyai.training.profiler import Profiler
-from skyai.training.schedule import CosineSchedule
+from harness.training import loop
+from harness.training.optimizer import build_optimizer
+from harness.training.profiler import Profiler
+from harness.training.schedule import CosineSchedule
+from skyai.model import GPT, GPTConfig
 
 # ---- helpers --------------------------------------------------------------
 

@@ -3,8 +3,8 @@
 import pytest
 import torch
 
-from skyai.nn.layers import RMSNorm
-from skyai.nn.model import GPT, GPTConfig
+from skyai.layers import RMSNorm
+from skyai.model import GPT, GPTConfig
 
 
 def _tiny_config(**overrides) -> GPTConfig:

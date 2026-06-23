@@ -8,8 +8,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from skyai.config.loader import load_config
-from skyai.config.schema import RunConfig
+from harness.config.loader import load_config
+from harness.config.schema import RunConfig
 
 # ---------- shared fixtures ----------
 

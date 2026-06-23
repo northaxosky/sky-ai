@@ -20,7 +20,7 @@ from torch.distributed import destroy_process_group, init_process_group
 from torch.nn import functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from skyai.eval.hellaswag import get_most_likely_row, iterate_examples, render_example
+from harness.eval.hellaswag import get_most_likely_row, iterate_examples, render_example
 
 # Load .env from repo root (regardless of cwd)
 load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")

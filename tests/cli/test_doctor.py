@@ -8,8 +8,8 @@ import torch
 import yaml
 from typer.testing import CliRunner
 
-from skyai.cli import doctor as doctor_module
-from skyai.cli.doctor import (
+from harness.cli import doctor as doctor_module
+from harness.cli.doctor import (
     _check_bf16,
     _check_checkpoint_dir,
     _check_cuda,
@@ -26,8 +26,8 @@ from skyai.cli.doctor import (
     _estimate_model_params,
     run_doctor,
 )
-from skyai.cli.main import app
-from skyai.config.loader import load_config
+from harness.cli.main import app
+from harness.config.loader import load_config
 
 runner = CliRunner()
 

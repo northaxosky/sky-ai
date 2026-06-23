@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 import torch
 
-from skyai.config.schema import (
+from harness.config.schema import (
     CheckpointConfig,
     DataConfig,
     EvalConfig,
@@ -19,7 +19,7 @@ from skyai.config.schema import (
     RunConfig,
     ScheduleConfig,
 )
-from skyai.training import loop
+from harness.training import loop
 
 
 def _make_smoke_shards(data_root: Path, vocab_size: int, n_tokens: int = 4096) -> None:

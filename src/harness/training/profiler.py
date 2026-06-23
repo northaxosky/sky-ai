@@ -9,8 +9,8 @@ from contextlib import contextmanager
 
 import torch
 
-from skyai.config.schema import ProfilingConfig
-from skyai.log import get_logger
+from harness.config.schema import ProfilingConfig
+from harness.log import get_logger
 
 logger = get_logger(__name__)
 

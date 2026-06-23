@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 import torch
 from torch import nn
 
-from skyai.log import get_logger
+from harness.log import get_logger
 
 if TYPE_CHECKING:
-    from skyai.config.schema import RunConfig
+    from harness.config.schema import RunConfig
 
 logger = get_logger(__name__)
 

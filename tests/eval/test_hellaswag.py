@@ -9,8 +9,8 @@ import tiktoken
 import torch
 from torch import nn
 
-from skyai.eval import hellaswag as hs
-from skyai.eval.result import EvalResult
+from harness.eval import hellaswag as hs
+from harness.eval.result import EvalResult
 
 
 @pytest.fixture

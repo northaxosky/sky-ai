@@ -79,7 +79,9 @@ happened yet. Results will be added here when it does.
 ## Project layout
 
 ```
-src/skyai/      model, tokenizer, harness (cli/, config/, data/, eval/, nn/, training/) plus checkpoint.py, ablation.py, generate.py, sample.py
+src/harness/    training framework: cli/, config/, data/, eval/, training/ + checkpoint.py, generate.py, sample.py, ablation.py, log.py, wandb_logger.py
+src/skyai/      the modern model (RMSNorm, RoPE, SwiGLU, GQA): model.py, attention.py, mlp.py, block.py, layers.py, init.py, flash.py
+src/gpt/        the GPT-2 (124M) reproduction
 notebooks/      prereq explorations and post-train sanity checks
 journal/        module-by-module learning notes
 tests/          shape + gradient unit tests, end-to-end smoke, golden numerics fixture
@@ -129,7 +131,7 @@ uv run skyai train --config configs/base.yaml --override schedule.max_steps=1000
 Multi-GPU is just `torchrun`:
 
 ```bash
-torchrun --standalone --nproc_per_node=8 -m skyai.cli.main train --config configs/base.yaml
+torchrun --standalone --nproc_per_node=8 -m harness.cli.main train --config configs/base.yaml
 ```
 
 The harness pins its numerics: a golden-fixture short-run test

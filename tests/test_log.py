@@ -9,8 +9,8 @@ from typing import Literal
 
 import pytest
 
-from skyai.config.schema import LogConfig
-from skyai.log import _RankFilter, get_logger, setup_logging
+from harness.config.schema import LogConfig
+from harness.log import _RankFilter, get_logger, setup_logging
 
 
 @pytest.fixture(autouse=True)
@@ -148,7 +148,7 @@ class TestRankFilter:
 
 class TestGetLogger:
     def test_returns_named_logger(self) -> None:
-        assert get_logger("skyai.training").name == "skyai.training"
+        assert get_logger("harness.training").name == "harness.training"
 
     def test_returns_same_logger_for_same_name(self) -> None:
         # Stdlib guarantees this; we're documenting the guarantee.

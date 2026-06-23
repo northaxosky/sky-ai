@@ -17,23 +17,23 @@ from torch import nn
 from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from skyai.checkpoint import load_checkpoint, restore_rng, save_checkpoint
-from skyai.config.schema import ModelConfig, RecoveryConfig, RunConfig
-from skyai.data.loader import DataLoader
-from skyai.eval import run_evals
-from skyai.log import get_logger
-from skyai.nn.model import GPT, GPTConfig
-from skyai.sample import sample
-from skyai.training.optimizer import build_optimizer
-from skyai.training.profiler import Profiler
-from skyai.training.recovery import (
+from harness.checkpoint import load_checkpoint, restore_rng, save_checkpoint
+from harness.config.schema import ModelConfig, RecoveryConfig, RunConfig
+from harness.data.loader import DataLoader
+from harness.eval import run_evals
+from harness.log import get_logger
+from harness.sample import sample
+from harness.training.optimizer import build_optimizer
+from harness.training.profiler import Profiler
+from harness.training.recovery import (
     NonFiniteGradError,
     detect_non_finite_grad,
     diagnose_oom,
     is_oom_error,
 )
-from skyai.training.schedule import CosineSchedule, WarmupStableDecaySchedule
-from skyai.wandb_logger import WandbLogger
+from harness.training.schedule import CosineSchedule, WarmupStableDecaySchedule
+from harness.wandb_logger import WandbLogger
+from skyai.model import GPT, GPTConfig
 
 _DTYPE_MAP: dict[str, torch.dtype] = {
     "float32": torch.float32,

@@ -11,7 +11,7 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-from skyai.cli.main import app
+from harness.cli.main import app
 
 runner = CliRunner()
 
@@ -116,11 +116,11 @@ class TestSampleEndToEnd:
     def _build_checkpoint(self, tmp_path: Path) -> Path:
         import yaml
 
-        from skyai.checkpoint import save_checkpoint
-        from skyai.config.loader import load_config
-        from skyai.nn.model import GPT
-        from skyai.training.loop import build_gpt_config
-        from skyai.training.optimizer import build_optimizer
+        from harness.checkpoint import save_checkpoint
+        from harness.config.loader import load_config
+        from harness.training.loop import build_gpt_config
+        from harness.training.optimizer import build_optimizer
+        from skyai.model import GPT
 
         # write a tiny but valid YAML config (vocab matches gpt2 for the CLI's encoder)
         cfg_dict = {

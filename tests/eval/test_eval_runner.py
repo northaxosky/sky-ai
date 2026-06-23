@@ -9,8 +9,8 @@ import tiktoken
 import torch
 from torch import nn
 
-from skyai.eval import EVALS, run_evals
-from skyai.eval.result import EvalResult
+from harness.eval import EVALS, run_evals
+from harness.eval.result import EvalResult
 
 
 @pytest.fixture
@@ -135,7 +135,7 @@ class TestRunEvals:
 class TestEvalsRegistry:
     def test_every_evals_key_matches_schema_literal(self) -> None:
         """Catches drift between EVALS dict and EvalConfig.evals Literal type"""
-        from skyai.config.schema import EvalConfig
+        from harness.config.schema import EvalConfig
 
         hints = get_type_hints(EvalConfig)
         literal_type = get_args(hints["evals"])[0]  # list[Literal["..."]] â Literal["..."]

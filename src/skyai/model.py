@@ -9,9 +9,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from skyai.nn.block import Block
-from skyai.nn.init import init_sky_ai_weights, init_weights
-from skyai.nn.layers import Linear, RMSNorm
+from skyai.block import Block
+from skyai.init import init_sky_ai_weights, init_weights
+from skyai.layers import Linear, RMSNorm
 
 
 def _pad_to_multiple(n: int, multiple: int) -> int:

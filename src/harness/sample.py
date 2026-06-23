@@ -6,7 +6,7 @@ import tiktoken
 import torch
 from torch import nn
 
-from skyai.generate import generate
+from harness.generate import generate
 
 
 def sample(

@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from skyai.nn.attention import CausalSelfAttention, apply_rotary_emb
+from skyai.attention import CausalSelfAttention, apply_rotary_emb
 
 
 def _make_cos_sin(seq_len: int, head_dim: int, base: float = 100000.0):

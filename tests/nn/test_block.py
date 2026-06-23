@@ -2,7 +2,7 @@
 
 import torch
 
-from skyai.nn.block import Block
+from skyai.block import Block
 
 
 def _make_cos_sin(seq_len: int, head_dim: int, base: float = 100000.0):

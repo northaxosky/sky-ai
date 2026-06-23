@@ -13,8 +13,8 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from skyai.config.loader import load_config
-from skyai.log import get_logger
+from harness.config.loader import load_config
+from harness.log import get_logger
 
 logger = get_logger(__name__)
 
@@ -183,7 +183,7 @@ def run_ablation(
             VariantResult(slug=v.slug, overrides=v.overrides, status="planned") for v in variants
         ]
 
-    from skyai.training.loop import train as run_train
+    from harness.training.loop import train as run_train
 
     base_override_strings = _overrides_to_strings(spec.base_overrides)
     results: list[VariantResult] = []

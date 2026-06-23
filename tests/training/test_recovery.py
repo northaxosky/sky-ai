@@ -1,11 +1,11 @@
-"""Tests for skyai.training.recovery"""
+"""Tests for harness.training.recovery"""
 
 from __future__ import annotations
 
 import torch
 from torch import nn
 
-from skyai.training.recovery import (
+from harness.training.recovery import (
     NonFiniteGradError,
     detect_non_finite_grad,
     is_oom_error,

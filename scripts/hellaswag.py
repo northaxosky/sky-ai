@@ -24,7 +24,7 @@ import torch
 from dotenv import load_dotenv
 from transformers import GPT2LMHeadModel
 
-from skyai.eval.hellaswag import compute_completion_losses, iterate_examples, render_example
+from harness.eval.hellaswag import compute_completion_losses, iterate_examples, render_example
 
 # Load .env from repo root (regardless of cwd)
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")

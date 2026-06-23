@@ -7,7 +7,7 @@ from collections.abc import Iterable
 
 import torch.nn as nn
 
-from skyai.nn.layers import ResidualProjection
+from skyai.layers import ResidualProjection
 
 
 def init_weights(module: nn.Module, n_layer: int) -> None:

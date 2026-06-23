@@ -3,7 +3,7 @@
 import torch
 import torch.nn as nn
 
-from skyai.nn.mlp import MLP
+from skyai.mlp import MLP
 
 
 def test_mlp_shape_preserving():

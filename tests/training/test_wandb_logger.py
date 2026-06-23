@@ -1,4 +1,4 @@
-"""Tests for skyai.wandb_logger"""
+"""Tests for harness.wandb_logger"""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from skyai.config.schema import LogConfig
-from skyai.wandb_logger import WandbLogger
+from harness.config.schema import LogConfig
+from harness.wandb_logger import WandbLogger
 
 
 @pytest.fixture
@@ -16,7 +16,7 @@ def mock_wandb(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
     """Replace the wandb module with a Magic Mock"""
     mock = MagicMock()
     mock.util.generate_id.return_value = "auto-id-123"
-    monkeypatch.setattr("skyai.wandb_logger.wandb", mock)
+    monkeypatch.setattr("harness.wandb_logger.wandb", mock)
     return mock
 
 

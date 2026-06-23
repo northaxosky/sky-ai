@@ -10,13 +10,13 @@ from typing import Annotated
 import torch
 import typer
 
-from skyai.checkpoint import load_checkpoint
-from skyai.config.loader import load_config
-from skyai.config.schema import LogConfig, RunConfig
-from skyai.log import get_logger, setup_logging
-from skyai.nn.model import GPT
-from skyai.sample import sample as sample_fn
-from skyai.training.loop import build_gpt_config
+from harness.checkpoint import load_checkpoint
+from harness.config.loader import load_config
+from harness.config.schema import LogConfig, RunConfig
+from harness.log import get_logger, setup_logging
+from harness.sample import sample as sample_fn
+from harness.training.loop import build_gpt_config
+from skyai.model import GPT
 
 app = typer.Typer(
     name="skyai",
@@ -64,7 +64,7 @@ def train(
         typer.Option(help="Auto-resume from latest checkpoint in cfg.checkpoint.dir"),
     ] = False,
 ) -> None:
-    from skyai.training.loop import train as run_train
+    from harness.training.loop import train as run_train
 
     cfg = _setup_run(config, override or [], log_name="train.log")
     logger.info(f"train: {config=}, {resume=}, {cfg.total_batch_size=}, {cfg.schedule.max_steps=}")
@@ -83,7 +83,7 @@ def evaluate(
     """Run the eval suite on a checkpoint and print per metric results"""
     import tiktoken
 
-    from skyai.eval import run_evals
+    from harness.eval import run_evals
 
     cfg = _setup_run(config, override or [], log_name="eval.log")
     bundle = load_checkpoint(checkpoint)
@@ -165,7 +165,7 @@ def doctor(
     ] = None,
 ) -> None:
     """Environment + project sanity checks"""
-    from skyai.cli.doctor import run_doctor
+    from harness.cli.doctor import run_doctor
 
     raise typer.Exit(run_doctor(config_path=config))
 
@@ -180,7 +180,7 @@ def ablate(
     force: Annotated[bool, typer.Option(help="Re-run variants even if result.json exists")] = False,
 ) -> None:
     """Sequential parameter sweep: train each variant, write results.{md,json}"""
-    from skyai.ablation import run_ablation
+    from harness.ablation import run_ablation
 
     output_dir.mkdir(parents=True, exist_ok=True)
     setup_logging(

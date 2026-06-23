@@ -6,7 +6,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from skyai.generate import generate
+from harness.generate import generate
 
 
 class _ToyLM(nn.Module):

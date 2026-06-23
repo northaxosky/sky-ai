@@ -5,8 +5,8 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-from skyai.nn.flash import attention
-from skyai.nn.layers import Linear, ResidualProjection, RMSNorm
+from skyai.flash import attention
+from skyai.layers import Linear, ResidualProjection, RMSNorm
 
 
 def apply_rotary_emb(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:

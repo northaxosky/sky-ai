@@ -27,6 +27,9 @@ def _tokenizer_vocab(name: str) -> int:
 
 class ModelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    family: Literal["gpt2", "modern"] = Field(
+        default="modern", description="Architecture Family: gpt2 (src/gpt) or modern (src/skyai/nn)"
+    )
 
     init_policy: Literal["gpt2", "sky-ai"] = Field(
         default="gpt2", description="Weight initialization policy"

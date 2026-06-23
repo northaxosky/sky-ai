@@ -6,7 +6,7 @@ import logging
 import sys
 from pathlib import Path
 
-from skyai.config.schema import LogConfig
+from harness.config.schema import LogConfig
 
 _LOG_FORMAT = "%(asctime)s [%(levelname)s] [rank %(rank)d] %(name)s: %(message)s"
 _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -57,5 +57,5 @@ def setup_logging(cfg: LogConfig, rank: int = 0, log_path: Path | None = None) -
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Thin wrapper so call sites improt from skyai.log, not stdlib logging"""
+    """Thin wrapper so call sites improt from harness.log, not stdlib logging"""
     return logging.getLogger(name)

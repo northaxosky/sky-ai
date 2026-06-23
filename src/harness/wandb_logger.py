@@ -6,8 +6,8 @@ from typing import Any
 
 import wandb
 
-from skyai.config.schema import LogConfig
-from skyai.log import get_logger
+from harness.config.schema import LogConfig
+from harness.log import get_logger
 
 logger = get_logger(__name__)
 

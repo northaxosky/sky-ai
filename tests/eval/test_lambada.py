@@ -9,8 +9,8 @@ import tiktoken
 import torch
 from torch import nn
 
-from skyai.eval import lambada as lam
-from skyai.eval.result import EvalResult
+from harness.eval import lambada as lam
+from harness.eval.result import EvalResult
 
 
 @pytest.fixture

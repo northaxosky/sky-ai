@@ -7,8 +7,8 @@ import time
 import pytest
 import torch
 
-from skyai.config.schema import ProfilingConfig
-from skyai.training.profiler import Profiler
+from harness.config.schema import ProfilingConfig
+from harness.training.profiler import Profiler
 
 
 def _disabled_cfg() -> ProfilingConfig:

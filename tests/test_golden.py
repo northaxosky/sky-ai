@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 import torch
 
-from skyai.config.schema import (
+from harness.config.schema import (
     CheckpointConfig,
     DataConfig,
     EvalConfig,
@@ -20,7 +20,7 @@ from skyai.config.schema import (
     RunConfig,
     ScheduleConfig,
 )
-from skyai.training import loop
+from harness.training import loop
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "golden_harness_short.json"
 REGEN = os.environ.get("REGENERATE_GOLDEN") == "1"

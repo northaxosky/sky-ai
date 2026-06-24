@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from gpt.block import Block
+from gpt.init import init_weights
 
 
 @dataclass
@@ -35,6 +36,9 @@ class GPT(nn.Module):
 
         # Weight tying: the output head IS the input embedding (same tensor)
         self.transformer.wte.weight = self.lm_head.weight
+
+        # GPT-2 init: recurse over every submodule
+        self.apply(lambda m: init_weights(m, config.n_layer))
 
     def forward(self, idx: torch.Tensor, targets: torch.Tensor | None = None):
         B, T = idx.size()

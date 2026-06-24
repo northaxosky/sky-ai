@@ -18,6 +18,7 @@ class CausalSelfAttention(nn.Module):
         self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd)
         # output projection back into the residual stream
         self.c_proj = nn.Linear(config.n_embd, config.n_embd)
+        self.c_proj._is_residual_projection = True
         self.n_head = config.n_head
         self.n_embd = config.n_embd
 

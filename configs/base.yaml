@@ -1,7 +1,8 @@
 
-# SkyAI V2 reproduction config.
-# Reproduces Phase 5 V2: val 3.397 / HellaSwag 27.3% at 10B tokens (8x A100, 8B params seen).
-# Frozen reference: do not edit. Derived configs should `extends: base.yaml` and override.
+# Shared GPT-2-style training recipe — the anchor every other config extends.
+# AdamW + cosine LR, 0.5M-token effective batch, ~one epoch over 10B FineWeb-Edu tokens.
+# The model section here builds the modern (skyai) 124M; gpt2.yaml flips model.family.
+# Treat as the frozen base: derive with `extends: base.yaml` and override.
 
 seed: 1337
 dtype: bfloat16

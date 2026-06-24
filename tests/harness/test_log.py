@@ -137,7 +137,7 @@ class TestRankFilter:
         filt = _RankFilter(rank=2)
         record = logging.LogRecord("x", logging.INFO, "f", 1, "msg", None, None)
         assert filt.filter(record) is True
-        assert record.rank == 2  # pyright: ignore
+        assert record.rank == 2
 
     def test_never_drops_records(self) -> None:
         filt = _RankFilter(rank=0)

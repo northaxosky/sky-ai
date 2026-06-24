@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 
 try:
-    from flash_attn_interface import flash_attn_func as _fa3_func  # pyright: ignore
+    from flash_attn_interface import flash_attn_func as _fa3_func
 
     _HAS_FA3 = True
 except ImportError:

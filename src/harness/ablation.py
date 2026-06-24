@@ -29,7 +29,7 @@ class AblationSpec(BaseModel):
     )
     sweep: dict[str, list[Any]] = Field(
         description="Dot keyed sweep dimensions, cartesian product over every list"
-    )  # pyright: ignore
+    )
 
     @model_validator(mode="after")
     def _scalars_only(self) -> AblationSpec:

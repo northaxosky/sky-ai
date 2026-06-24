@@ -15,8 +15,7 @@ from harness.config.loader import load_config
 from harness.config.schema import LogConfig, RunConfig
 from harness.log import get_logger, setup_logging
 from harness.sample import sample as sample_fn
-from harness.training.loop import build_gpt_config
-from skyai.model import GPT
+from harness.training.loop import build_model
 
 app = typer.Typer(
     name="skyai",
@@ -90,7 +89,7 @@ def evaluate(
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     mc = bundle.config.model
-    model = GPT(build_gpt_config(mc))
+    model = build_model(mc)
     model.load_state_dict(bundle.model_state)
     model.to(device).eval()
 
@@ -100,8 +99,14 @@ def evaluate(
 
     logger.info(f"eval: ckpt step={bundle.step}, {device=}, {cfg.dtype=}, evals={cfg.eval.evals}")
     results = run_evals(
-        cfg.eval.evals, model, encoder=enc, device=device, rank=0, world_size=1, dtype=dtype
-    )  # pyright: ignore
+        cfg.evals.evals,
+        model,
+        encoder=enc,
+        device=device,
+        rank=0,
+        world_size=1,
+        dtype=dtype,
+    )
 
     for name, result in results.items():
         for metric, value in result.metrics.items():
@@ -127,7 +132,7 @@ def sample(
 
     bundle = load_checkpoint(checkpoint)
     mc = bundle.config.model
-    model = GPT(build_gpt_config(mc))
+    model = build_model(mc)
     model.load_state_dict(bundle.model_state)
     model.to(device).eval()
 

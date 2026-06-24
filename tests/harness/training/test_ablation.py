@@ -248,7 +248,7 @@ class TestRunAblation:
         results = run_ablation(spec_path, tmp_path / "out")
         statuses = [r.status for r in results]
         assert statuses == ["ok", "failed", "ok"]
-        assert "simulated NaN halt" in results[1].error  # pyright: ignore
+        assert "simulated NaN halt" in results[1].error
 
     def test_skip_when_result_exists(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         base = _write_base_config(tmp_path)

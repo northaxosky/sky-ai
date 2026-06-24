@@ -252,7 +252,7 @@ class TestRoundTrip:
         self, save_kwargs: dict[str, Any], model: torch.nn.Module
     ) -> None:
         with torch.no_grad():
-            model.linear.weight.fill_(0.4242)  # pyright: ignore
+            model.linear.weight.fill_(0.4242)
         save_checkpoint(step=1, **save_kwargs)
 
         bundle = load_checkpoint(save_kwargs["dir"])

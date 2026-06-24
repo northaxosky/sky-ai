@@ -24,7 +24,7 @@ LAMBADA_REVISION = "900124bf3b8235c6daf21033af9948b3f07346c4"
 def _load_examples() -> list[str]:
     """Load LAMBADA OpenAI test passages as raw strings"""
     ds = load_dataset(LAMBADA_DATASET_ID, split=LAMBADA_SPLIT, revision=LAMBADA_REVISION)
-    return [ex["text"] for ex in ds]  # pyright: ignore
+    return [ex["text"] for ex in ds]
 
 
 def _render_lambada(

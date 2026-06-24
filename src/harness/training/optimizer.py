@@ -177,10 +177,10 @@ def build_muon_split_optimizer(
     device_type: str = "cuda",
 ) -> OptimizerChain:
     batch_scale = (total_batch_size / 524288) ** 0.5
-    dim_scale = (model.config.n_embed / 768) ** -0.5  # pyright: ignore[reportAttributeAccessIssue]
+    dim_scale = (model.config.n_embed / 768) ** -0.5
 
-    embedding_params = [model.transformer.wte.weight]  # pyright: ignore[reportAttributeAccessIssue]
-    lm_head_params = [] if model.config.tie_weights else [model.lm_head.weight]  # pyright: ignore[reportAttributeAccessIssue]
+    embedding_params = [model.transformer.wte.weight]
+    lm_head_params = [] if model.config.tie_weights else [model.lm_head.weight]
     reserved_ids = {id(p) for p in embedding_params + lm_head_params}
 
     muon_params: list[nn.Parameter] = []
@@ -195,7 +195,10 @@ def build_muon_split_optimizer(
 
     adam_groups = [
         _adam_group(
-            "embed", embedding_params, embedding_lr * batch_scale * dim_scale, weight_decay=0.001
+            "embed",
+            embedding_params,
+            embedding_lr * batch_scale * dim_scale,
+            weight_decay=0.001,
         ),
     ]
     if lm_head_params:

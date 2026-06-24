@@ -36,7 +36,7 @@ class WandbLogger:
             run_id = resume_id
             resume_mode = "must"
         else:
-            run_id = wandb.util.generate_id()  # pyright: ignore
+            run_id = wandb.util.generate_id()
             resume_mode = "allow"
         wandb.init(
             project=cfg.wandb_project,

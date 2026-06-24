@@ -18,7 +18,7 @@ def _tiny_config(**overrides) -> GPTConfig:
         logit_softcap=None,
     )
     base.update(overrides)
-    return GPTConfig(**base)  # pyright: ignore
+    return GPTConfig(**base)
 
 
 def _assert_std(tensor: torch.Tensor, expected: float, rel: float = 0.15) -> None:
@@ -33,8 +33,8 @@ def test_gpt2_policy_keeps_current_model_init() -> None:
     _assert_std(model.lm_head.weight, 0.02, rel=0.10)
 
     expected_resid = 0.02 * (2 * model.config.n_layer) ** -0.5
-    _assert_std(model.transformer.h[0].attn.c_proj.weight, expected_resid)  # pyright: ignore
-    _assert_std(model.transformer.h[0].mlp.down_proj.weight, expected_resid)  # pyright: ignore
+    _assert_std(model.transformer.h[0].attn.c_proj.weight, expected_resid)
+    _assert_std(model.transformer.h[0].mlp.down_proj.weight, expected_resid)
 
 
 def test_sky_ai_policy_uses_embedding_and_head_scales() -> None:
@@ -59,11 +59,11 @@ def test_sky_ai_policy_uses_width_scaled_inputs() -> None:
     model = GPT(cfg)
     block = model.transformer.h[0]
 
-    _assert_std(block.attn.c_q.weight, cfg.n_embed**-0.5)  # pyright: ignore
-    _assert_std(block.attn.c_k.weight, cfg.n_embed**-0.5)  # pyright: ignore
-    _assert_std(block.attn.c_v.weight, cfg.n_embed**-0.5)  # pyright: ignore
-    _assert_std(block.mlp.gate_proj.weight, 0.4 * cfg.n_embed**-0.5)  # pyright: ignore
-    _assert_std(block.mlp.up_proj.weight, 0.4 * cfg.n_embed**-0.5)  # pyright: ignore
+    _assert_std(block.attn.c_q.weight, cfg.n_embed**-0.5)
+    _assert_std(block.attn.c_k.weight, cfg.n_embed**-0.5)
+    _assert_std(block.attn.c_v.weight, cfg.n_embed**-0.5)
+    _assert_std(block.mlp.gate_proj.weight, 0.4 * cfg.n_embed**-0.5)
+    _assert_std(block.mlp.up_proj.weight, 0.4 * cfg.n_embed**-0.5)
 
 
 def test_sky_ai_policy_zeroes_residual_outputs() -> None:
@@ -71,8 +71,8 @@ def test_sky_ai_policy_zeroes_residual_outputs() -> None:
     model = GPT(_tiny_config(init_policy="sky-ai"))
 
     for block in model.transformer.h:
-        assert torch.count_nonzero(block.attn.c_proj.weight) == 0  # pyright: ignore
-        assert torch.count_nonzero(block.mlp.down_proj.weight) == 0  # pyright: ignore
+        assert torch.count_nonzero(block.attn.c_proj.weight) == 0
+        assert torch.count_nonzero(block.mlp.down_proj.weight) == 0
 
 
 def test_linear_init_std_is_0_02():

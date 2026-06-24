@@ -48,7 +48,7 @@ def _smoke_cfg(tmp_path: Path, *, max_steps: int = 5, evals: list[str] | None = 
         data=DataConfig(root=data_root, batch_size=4),
         optim=OptimConfig(weight_decay=0.0),
         schedule=ScheduleConfig(max_lr=1e-3, min_lr=1e-4, warmup_steps=1, max_steps=max_steps),
-        eval=EvalConfig(interval=2, val_steps=1, evals=evals if evals is not None else []),  # pyright: ignore
+        eval=EvalConfig(interval=2, val_steps=1, evals=evals if evals is not None else []),
         log=LogConfig(dir=tmp_path / "logs", wandb=False),
         checkpoint=CheckpointConfig(
             dir=tmp_path / "ckpt",

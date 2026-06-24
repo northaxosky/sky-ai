@@ -17,7 +17,7 @@ def _tiny_config(**overrides) -> GPTConfig:
         logit_softcap=None,
     )
     base.update(overrides)
-    return GPTConfig(**base)  # pyright: ignore
+    return GPTConfig(**base)
 
 
 def test_forward_shapes():

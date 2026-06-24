@@ -23,7 +23,7 @@ class TestDetectNonFiniteGrad:
         y.backward()
         if grad_value is not None:
             # Poison the second layer's bias gradient
-            model[1].bias.grad.fill_(grad_value)  # pyright: ignore
+            model[1].bias.grad.fill_(grad_value)
         return model
 
     def test_all_finite_returns_none(self) -> None:
@@ -58,8 +58,8 @@ class TestDetectNonFiniteGrad:
         x = torch.randn(1, 2)
         model(x).sum().backward()
         # Poison both layers
-        model[0].weight.grad.fill_(float("nan"))  # pyright: ignore
-        model[1].weight.grad.fill_(float("nan"))  # pyright: ignore
+        model[0].weight.grad.fill_(float("nan"))
+        model[1].weight.grad.fill_(float("nan"))
         bad = detect_non_finite_grad(model)
         # named_parameters iterates in registration order; 0.weight comes first
         assert bad == "0.weight"

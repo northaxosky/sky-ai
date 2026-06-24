@@ -28,7 +28,7 @@ def _tokenizer_vocab(name: str) -> int:
 class ModelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     family: Literal["gpt2", "modern"] = Field(
-        default="modern", description="Architecture Family: gpt2 (src/gpt) or modern (src/skyai/nn)"
+        default="modern", description="Architecture Family: gpt2 (src/gpt) or modern (src/skyai)"
     )
 
     init_policy: Literal["gpt2", "sky-ai"] = Field(
@@ -98,6 +98,17 @@ class ModelConfig(BaseModel):
                 f"n_vocab ({encoder_vocab}) padded to vocab_pad_multiple "
                 f"{self.vocab_pad_multiple} ({max_vocab_size})"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _gpt2_rejects_modern_fields(self) -> ModelConfig:
+        if self.family == "gpt2":
+            modern_only = {"n_kv_head", "rope_theta", "logit_softcap"}
+            explicit = modern_only & self.model_fields_set
+            if explicit:
+                raise ValueError(
+                    f"family='gpt2' is classic GPT-2 and does not use modern fields; remove: {sorted(explicit)}"
+                )
         return self
 
 

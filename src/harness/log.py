@@ -41,7 +41,7 @@ def setup_logging(cfg: LogConfig, rank: int = 0, log_path: Path | None = None) -
     console.setLevel(cfg.level if rank == 0 else "WARNING")
     console.setFormatter(formatter)
     console.addFilter(rank_filter)
-    console._skyai = True  # pyright: ignore
+    console._skyai = True
     root.addHandler(console)
 
     if rank == 0:
@@ -52,7 +52,7 @@ def setup_logging(cfg: LogConfig, rank: int = 0, log_path: Path | None = None) -
         file_handler.setLevel(logging.DEBUG)
         file_handler.setFormatter(formatter)
         file_handler.addFilter(rank_filter)
-        file_handler._skyai = True  # pyright: ignore
+        file_handler._skyai = True
         root.addHandler(file_handler)
 
 

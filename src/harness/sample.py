@@ -38,14 +38,14 @@ def sample(
     x = x.repeat(n_samples, 1)
 
     if max_context_len is None:
-        max_context_len = model.config.block_size  # pyright: ignore
+        max_context_len = model.config.block_size
 
     max_new_tokens = max(1, max_length - x.size(1))
     out = generate(
         model,
         x,
         max_new_tokens=max_new_tokens,
-        max_context_len=max_context_len,  # pyright: ignore
+        max_context_len=max_context_len,
         temperature=temperature,
         top_k=top_k,
         generator=generator,

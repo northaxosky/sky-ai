@@ -276,6 +276,7 @@ class TestBuildModel:
             device="cpu",
             dist_info=loop.DistInfo(rank=0, local_rank=0, world_size=1),
         )
+        assert isinstance(raw_model, GPT)
 
         assert forward_model is raw_model
         assert raw_model.config.init_policy == "sky-ai"
@@ -296,7 +297,7 @@ class TestMaybeResume:
         model = _tiny_gpt()
         optim = build_optimizer(model, learning_rate=1e-3, weight_decay=0.0, device_type="cpu")
         loader = _StubLoader()
-        start_step, run_id = loop._maybe_resume(cfg, model, optim, loader)  # pyright: ignore
+        start_step, run_id = loop._maybe_resume(cfg, model, optim, loader)
         assert start_step == 0
         assert run_id is None
 
@@ -312,7 +313,7 @@ class TestMaybeResume:
             step=7,
             model=model,
             optimizer=optim,
-            data_loader=saver_loader,  # pyright: ignore
+            data_loader=saver_loader,
             config=cfg,
             metrics={"val_loss": 4.2},
             wandb_run_id="run-abc",
@@ -323,7 +324,7 @@ class TestMaybeResume:
         )
 
         fresh_loader = _StubLoader()
-        start_step, run_id = loop._maybe_resume(cfg, model, optim, fresh_loader)  # pyright: ignore
+        start_step, run_id = loop._maybe_resume(cfg, model, optim, fresh_loader)
         assert start_step == 8
         assert run_id == "run-abc"
         assert fresh_loader.state_dict() == {"position": 1234}
@@ -337,7 +338,7 @@ class TestMaybeResume:
             step=3,
             model=model,
             optimizer=optim,
-            data_loader=_StubLoader(),  # pyright: ignore
+            data_loader=_StubLoader(),
             config=cfg,
             metrics={"val_loss": 4.2},
             wandb_run_id=None,
@@ -350,7 +351,7 @@ class TestMaybeResume:
         new_data = cfg.data.model_copy(update={"batch_size": 2})
         new_cfg = cfg.model_copy(update={"data": new_data})
         with pytest.raises(RuntimeError, match="data.batch_size"):
-            loop._maybe_resume(new_cfg, model, optim, _StubLoader())  # pyright: ignore
+            loop._maybe_resume(new_cfg, model, optim, _StubLoader())
 
     def test_rejects_resume_when_block_size_changed(self, tmp_path: Path) -> None:
         cfg = _tiny_cfg(tmp_path)
@@ -361,7 +362,7 @@ class TestMaybeResume:
             step=3,
             model=model,
             optimizer=optim,
-            data_loader=_StubLoader(),  # pyright: ignore
+            data_loader=_StubLoader(),
             config=cfg,
             metrics={"val_loss": 4.2},
             wandb_run_id=None,
@@ -373,7 +374,7 @@ class TestMaybeResume:
         new_model = cfg.model.model_copy(update={"block_size": 8})
         new_cfg = cfg.model_copy(update={"model": new_model})
         with pytest.raises(RuntimeError, match="block_size"):
-            loop._maybe_resume(new_cfg, _tiny_gpt(), optim, _StubLoader())  # pyright: ignore
+            loop._maybe_resume(new_cfg, _tiny_gpt(), optim, _StubLoader())
 
     def test_rejects_resume_when_vocab_changed(self, tmp_path: Path) -> None:
         cfg = _tiny_cfg(tmp_path)
@@ -384,7 +385,7 @@ class TestMaybeResume:
             step=3,
             model=model,
             optimizer=optim,
-            data_loader=_StubLoader(),  # pyright: ignore
+            data_loader=_StubLoader(),
             config=cfg,
             metrics={"val_loss": 4.2},
             wandb_run_id=None,
@@ -397,7 +398,7 @@ class TestMaybeResume:
         new_model = cfg.model.model_copy(update={"vocab_size": 50257})
         new_cfg = cfg.model_copy(update={"model": new_model})
         with pytest.raises(RuntimeError, match="vocab_size"):
-            loop._maybe_resume(new_cfg, _tiny_gpt(), optim, _StubLoader())  # pyright: ignore
+            loop._maybe_resume(new_cfg, _tiny_gpt(), optim, _StubLoader())
 
     @pytest.mark.parametrize(
         ("field", "value"),
@@ -425,7 +426,7 @@ class TestMaybeResume:
             step=3,
             model=model,
             optimizer=optim,
-            data_loader=_StubLoader(),  # pyright: ignore
+            data_loader=_StubLoader(),
             config=cfg,
             metrics={"val_loss": 4.2},
             wandb_run_id=None,
@@ -438,7 +439,7 @@ class TestMaybeResume:
         new_model = cfg.model.model_copy(update={field: value})
         new_cfg = cfg.model_copy(update={"model": new_model})
         with pytest.raises(RuntimeError, match=field):
-            loop._maybe_resume(new_cfg, model, optim, _StubLoader())  # pyright: ignore
+            loop._maybe_resume(new_cfg, model, optim, _StubLoader())
 
 
 class TestRunTrainStep:
@@ -456,7 +457,7 @@ class TestRunTrainStep:
             sched,
             dist_info,
             _noop_profiler(),
-            _default_recovery(),  # pyright: ignore
+            _default_recovery(),
             step=0,
             grad_accum_steps=2,
             grad_clip=1.0,
@@ -483,7 +484,7 @@ class TestRunTrainStep:
                 sched,
                 dist_info,
                 _noop_profiler(),
-                RecoveryConfig(nan_grad_action="halt"),  # pyright: ignore
+                RecoveryConfig(nan_grad_action="halt"),
                 step=0,
                 grad_accum_steps=1,
                 grad_clip=1.0,
@@ -506,7 +507,7 @@ class TestRunTrainStep:
             sched,
             dist_info,
             _noop_profiler(),
-            _default_recovery(),  # pyright: ignore
+            _default_recovery(),
             step=0,
             grad_accum_steps=1,
             grad_clip=1.0,
@@ -522,7 +523,7 @@ class TestRunTrainStep:
                 sched,
                 dist_info,
                 _noop_profiler(),
-                _default_recovery(),  # pyright: ignore
+                _default_recovery(),
                 step=step,
                 grad_accum_steps=1,
                 grad_clip=1.0,
@@ -537,7 +538,7 @@ class TestRunTrainStep:
             sched,
             dist_info,
             _noop_profiler(),
-            _default_recovery(),  # pyright: ignore
+            _default_recovery(),
             step=25,
             grad_accum_steps=1,
             grad_clip=1.0,
@@ -557,7 +558,7 @@ class TestRunValLoss:
             model,
             loader,
             dist_info,
-            _noop_profiler(),  # pyright: ignore
+            _noop_profiler(),
             val_steps=3,
             device="cpu",
             device_type="cpu",
@@ -575,7 +576,7 @@ class TestRunValLoss:
             model,
             loader,
             dist_info,
-            _noop_profiler(),  # pyright: ignore
+            _noop_profiler(),
             val_steps=1,
             device="cpu",
             device_type="cpu",

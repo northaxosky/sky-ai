@@ -124,10 +124,19 @@ def build_gpt_config(model_cfg: ModelConfig) -> GPTConfig:
     )
 
 
-def _build_model(cfg: RunConfig, device: str, dist_info: DistInfo) -> tuple[nn.Module, GPT]:
+def build_model(model_cfg: ModelConfig) -> nn.Module:
+    """Construct the model for the configured architecture family"""
+    if model_cfg.family == "modern":
+        return GPT(build_gpt_config(model_cfg))
+    if model_cfg.family == "gpt2":
+        raise NotImplementedError("gpt2 not impl yet")
+
+    raise ValueError(f"Unknown model family {model_cfg.family!r}")
+
+
+def _build_model(cfg: RunConfig, device: str, dist_info: DistInfo) -> tuple[nn.Module, nn.Module]:
     """Build GPT, move to device, optionally compile + DDP"""
-    gpt_cfg = build_gpt_config(cfg.model)
-    raw_model = GPT(gpt_cfg)
+    raw_model = build_model(cfg.model)
     raw_model.to(device)
 
     forward_model: nn.Module = raw_model
@@ -140,7 +149,7 @@ def _build_model(cfg: RunConfig, device: str, dist_info: DistInfo) -> tuple[nn.M
 
 def _build_components(
     cfg: RunConfig, dist_info: DistInfo, device: str
-) -> tuple[nn.Module, GPT, Any, Any, DataLoader, DataLoader, int]:
+) -> tuple[nn.Module, nn.Module, Any, Any, DataLoader, DataLoader, int]:
     """Build forward model, raw model, optimizer, schedule, train and val loader, grad_accum_steps"""
     grad_accum_steps = _compute_grad_accum(cfg, dist_info.world_size)
     forward_model, raw_model = _build_model(cfg, device, dist_info)
@@ -238,7 +247,7 @@ def _assert_resume_compatible(current: RunConfig, saved: RunConfig) -> None:
 
 
 def _maybe_resume(
-    cfg: RunConfig, raw_model: GPT, optimizer: torch.optim.Optimizer, train_loader: DataLoader
+    cfg: RunConfig, raw_model: nn.Module, optimizer: torch.optim.Optimizer, train_loader: DataLoader
 ) -> tuple[int, str | None]:
     """Restore from latest potentially"""
     latest = cfg.checkpoint.dir / "latest.json"
@@ -286,7 +295,7 @@ def _run_train_step(
 
         # DDP sync skip: only sync grads on the final micro step
         if dist_info.is_ddp:
-            forward_model.require_backward_grad_sync = micro_step == grad_accum_steps - 1  # pyright: ignore
+            forward_model.require_backward_grad_sync = micro_step == grad_accum_steps - 1
 
         with profiler.region("forward"):
             with torch.autocast(device_type=device_type, dtype=dtype):
@@ -507,8 +516,8 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
 
                 with profiler.region("eval_suite"):
                     eval_results = run_evals(
-                        cfg.eval.evals,  # pyright: ignore
-                        raw_model,  # pyright: ignore
+                        cfg.eval.evals,
+                        raw_model,
                         encoder=encoder,
                         device=device,
                         rank=dist_info.rank,

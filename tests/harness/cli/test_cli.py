@@ -166,7 +166,7 @@ class TestSampleEndToEnd:
             step=0,
             model=model,
             optimizer=optim,
-            data_loader=_StubLoader(),  # pyright: ignore
+            data_loader=_StubLoader(),
             config=cfg,
             metrics={"val_loss": 10.0},
         )

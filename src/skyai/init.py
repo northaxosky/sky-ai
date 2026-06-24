@@ -47,16 +47,16 @@ def init_sky_ai_weights(
     mlp_input_std = 0.4 * attn_input_std
 
     for block in blocks:
-        _uniform_with_std_(block.attn.c_q, attn_input_std)  # pyright: ignore
-        _uniform_with_std_(block.attn.c_k, attn_input_std)  # pyright: ignore
-        _uniform_with_std_(block.attn.c_v, attn_input_std)  # pyright: ignore
+        _uniform_with_std_(block.attn.c_q, attn_input_std)
+        _uniform_with_std_(block.attn.c_k, attn_input_std)
+        _uniform_with_std_(block.attn.c_v, attn_input_std)
 
-        _zero_weight_and_bias(block.attn.c_proj)  # pyright: ignore
+        _zero_weight_and_bias(block.attn.c_proj)
 
-        _uniform_with_std_(block.mlp.gate_proj, mlp_input_std)  # pyright: ignore
-        _uniform_with_std_(block.mlp.up_proj, mlp_input_std)  # pyright: ignore
+        _uniform_with_std_(block.mlp.gate_proj, mlp_input_std)
+        _uniform_with_std_(block.mlp.up_proj, mlp_input_std)
 
-        _zero_weight_and_bias(block.mlp.down_proj)  # pyright: ignore
+        _zero_weight_and_bias(block.mlp.down_proj)
 
 
 def _uniform_with_std_(module: nn.Linear, std: float) -> None:

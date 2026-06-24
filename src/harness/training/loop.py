@@ -129,7 +129,18 @@ def build_model(model_cfg: ModelConfig) -> nn.Module:
     if model_cfg.family == "modern":
         return GPT(build_gpt_config(model_cfg))
     if model_cfg.family == "gpt2":
-        raise NotImplementedError("gpt2 not impl yet")
+        from gpt.model import GPT as GPT2
+        from gpt.model import GPTConfig as Gpt2Config
+
+        return GPT2(
+            Gpt2Config(
+                n_layer=model_cfg.n_layer,
+                n_head=model_cfg.n_head,
+                n_embd=model_cfg.n_embed,
+                vocab_size=model_cfg.vocab_size,
+                block_size=model_cfg.block_size,
+            )
+        )
 
     raise ValueError(f"Unknown model family {model_cfg.family!r}")
 

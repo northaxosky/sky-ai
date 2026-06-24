@@ -290,6 +290,14 @@ class TestBuildModel:
         assert raw_model.config.vocab_size_padded == 50432
         assert raw_model.transformer.wte.weight.data_ptr() == raw_model.lm_head.weight.data_ptr()
 
+    def test_gpt2_family_builds_gpt(self) -> None:
+        from gpt.model import GPT as GPT2
+
+        cfg = ModelConfig(
+            family="gpt2", n_layer=2, n_head=2, n_embed=16, vocab_size=50257, block_size=16
+        )
+        assert isinstance(loop.build_model(cfg), GPT2)
+
 
 class TestMaybeResume:
     def test_no_checkpoint_returns_zero(self, tmp_path: Path) -> None:

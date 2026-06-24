@@ -21,6 +21,8 @@ from harness.config.schema import (
 )
 from harness.training import loop
 
+pytestmark = pytest.mark.slow
+
 
 def _make_smoke_shards(data_root: Path, vocab_size: int, n_tokens: int = 4096) -> None:
     """Write train_000.npy + val_000.npy with random token ids in [0, vocab_size)"""

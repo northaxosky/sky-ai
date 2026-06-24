@@ -22,6 +22,7 @@ from harness.config.schema import (
 )
 from harness.training import loop
 
+pytestmark = pytest.mark.slow
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "golden_harness_short.json"
 REGEN = os.environ.get("REGENERATE_GOLDEN") == "1"
 

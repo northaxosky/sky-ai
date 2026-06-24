@@ -22,7 +22,6 @@ from harness.config.schema import (
 )
 from harness.training import loop
 
-pytestmark = pytest.mark.slow
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "golden_harness_short.json"
 REGEN = os.environ.get("REGENERATE_GOLDEN") == "1"
 
@@ -124,6 +123,7 @@ def _compare_metrics(actual: dict, expected: dict, atol: float = 1e-5) -> None:
     )
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(REGEN, reason="Skipped during fixture regeneration")
 def test_golden_matches_fixture(tmp_path: Path) -> None:
     """Harness output must match the committed golden fixture"""

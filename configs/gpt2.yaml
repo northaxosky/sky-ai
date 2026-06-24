@@ -1,0 +1,8 @@
+# GPT-2 (124M)
+extends: base.yaml
+
+model:
+  family: gpt2    # swaps the modern stack for failthful GPT-2
+
+checkpoint:
+  dir: checkpoints/gpt2

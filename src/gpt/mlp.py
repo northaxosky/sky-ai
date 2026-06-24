@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
 import torch.nn as nn
 
-from gpt.model import GPTConfig
+if TYPE_CHECKING:
+    from gpt.model import GPTConfig
 
 
 class MLP(nn.Module):

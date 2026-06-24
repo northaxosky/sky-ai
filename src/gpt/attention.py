@@ -1,35 +1,42 @@
 from __future__ import annotations
 
-import math
+from typing import TYPE_CHECKING
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
-from gpt.attention import CausalSelfAttention
-from gpt.model import GPTConfig
+if TYPE_CHECKING:
+    from gpt.model import GPTConfig
 
 
-def manual_causal_self_attention(q, k, v):
-    """Reference impl: exactly what scaled_dot_product_attention computes, spelled out"""
-    N, nh, T, hd = q.shape
-    att = (q @ k.transpose(-2, -1)) / math.sqrt(hd)  # (B, nh, T, T) scores
-    causal = torch.tril(torch.ones(T, T)).view(1, 1, T, T)  # 1 on/below diagonal
-    att = att.masked_fill(causal == 0, float("-inf"))  # forbid attending to the future
-    att = F.softmax(att, dim=-1)  # weights over past positions
-    return att @ v  # (B, nh, T, hd) weighted sum of values
+class CausalSelfAttention(nn.Module):
+    def __init__(self, config: GPTConfig) -> None:
+        super().__init__()
+        assert config.n_embd % config.n_head == 0
+        # one fused projection produces q, k, v together
+        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd)
+        # output projection back into the residual stream
+        self.c_proj = nn.Linear(config.n_embd, config.n_embd)
+        self.n_head = config.n_head
+        self.n_embd = config.n_embd
 
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        B, T, C = x.size()  # C == n_embd
 
-def test_manual_matches_sdpa():
-    torch.manual_seed(0)
-    B, nh, T, hd = 2, 4, 16, 8
-    q, k, v = (torch.randn(B, nh, T, hd) for _ in range(3))
-    y_manual = manual_causal_self_attention(q, k, v)
-    y_flash = F.scaled_dot_product_attention(q, k, v, is_causal=True)
-    assert torch.allclose(y_manual, y_flash, atol=1e-6)  # same function, different algorithm/impl
+        qkv = self.c_attn(x)  # (B, T, 3C) — one matmul
+        q, k, v = qkv.split(self.n_embd, dim=2)  # three (B, T, C)
 
+        head_dim = C // self.n_head  # 768 / 12 = 64
+        # (B, T, C) -> (B, T, nh, hd) -> (B, nh, T, hd)
+        q = q.view(B, T, self.n_head, head_dim).transpose(1, 2)
+        k = k.view(B, T, self.n_head, head_dim).transpose(1, 2)
+        v = v.view(B, T, self.n_head, head_dim).transpose(1, 2)
 
-def test_attention_shape_and_causality():
-    cfg = GPTConfig(block_size=16, vocab_size=50257, n_layer=1, n_head=4, n_embd=32)
-    attn = CausalSelfAttention(cfg)
-    x = torch.randn(2, 8, 32)
-    assert attn(x).shape == (2, 8, 32)  # shape preserved
+        # flash attention via SDPA; is_causal applies the lower-triangular mask
+        # internally without ever building a (T, T) tensor
+        y = F.scaled_dot_product_attention(q, k, v, is_causal=True)  # (B, nh, T, hd)
+
+        # (B, nh, T, hd) -> (B, T, nh, hd) -> (B, T, C): concatenate heads
+        y = y.transpose(1, 2).contiguous().view(B, T, C)
+        return self.c_proj(y)

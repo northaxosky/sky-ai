@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import re
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
 
@@ -14,6 +15,17 @@ from typer.testing import CliRunner
 from harness.cli.main import app
 
 runner = CliRunner()
+
+# Typer renders --help through Rich. With color enabled, Rich's option highlighter
+# styles the leading dashes separately (e.g. "-"<reset>"--config"), so "--config" is
+# not a contiguous substring. CI renders help in color (NO_COLOR doesn't override a
+# forced color), so strip the ANSI codes to make the help assertions color-agnostic.
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _plain(result) -> str:
+    """CLI output with ANSI color codes removed."""
+    return _ANSI_RE.sub("", result.output)
 
 
 @pytest.fixture(autouse=True)
@@ -31,14 +43,6 @@ def _reset_root_logger():
     root.handlers.clear()
     root.handlers.extend(saved_handlers)
     root.setLevel(saved_level)
-
-
-@pytest.fixture(autouse=True)
-def _wide_terminal(monkeypatch):
-    """Force a wide terminal so Rich-rendered --help output doesn't wrap option
-    names. CI has no TTY and defaults to 80 columns, which splits flags like
-    '--config' across lines and breaks the substring assertions in TestHelp."""
-    monkeypatch.setenv("COLUMNS", "200")
 
 
 def _minimal_yaml(tmp_path: Path) -> Path:
@@ -83,30 +87,35 @@ class TestHelp:
     def test_root_help_lists_all_commands(self) -> None:
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
+        out = _plain(result)
         for name in ("version", "train", "eval", "sample", "doctor"):
-            assert name in result.output
+            assert name in out
 
     def test_train_help_mentions_config_and_resume(self) -> None:
         result = runner.invoke(app, ["train", "--help"])
         assert result.exit_code == 0
-        assert "--config" in result.output
-        assert "--resume" in result.output
+        out = _plain(result)
+        assert "--config" in out
+        assert "--resume" in out
 
     def test_eval_help_mentions_config_and_checkpoint(self) -> None:
         result = runner.invoke(app, ["eval", "--help"])
         assert result.exit_code == 0
-        assert "--config" in result.output
-        assert "--checkpoint" in result.output
+        out = _plain(result)
+        assert "--config" in out
+        assert "--checkpoint" in out
 
     def test_sample_help_mentions_checkpoint_and_prompt(self) -> None:
         result = runner.invoke(app, ["sample", "--help"])
         assert result.exit_code == 0
-        assert "--checkpoint" in result.output
-        assert "--prompt" in result.output
+        out = _plain(result)
+        assert "--checkpoint" in out
+        assert "--prompt" in out
 
     def test_sample_help_mentions_new_flags(self) -> None:
         result = runner.invoke(app, ["sample", "--help"])
         assert result.exit_code == 0
+        out = _plain(result)
         for flag in (
             "--num-samples",
             "--max-new-tokens",
@@ -115,7 +124,7 @@ class TestHelp:
             "--seed",
             "--device",
         ):
-            assert flag in result.output, f"missing {flag} in sample --help"
+            assert flag in out, f"missing {flag} in sample --help"
 
 
 class TestSampleEndToEnd:

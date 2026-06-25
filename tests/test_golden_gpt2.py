@@ -49,7 +49,7 @@ def _golden_cfg(tmp_path: Path) -> RunConfig:
         grad_clip=1.0,
         total_batch_size=64,
         model=ModelConfig(
-            family="gpt2", n_layer=2, n_head=2, n_embed=16, vocab_size=50257, block_size=16
+            family="gpt2", n_layer=2, n_head=2, n_embd=16, vocab_size=50257, block_size=16
         ),
         data=DataConfig(root=data_root, batch_size=2),
         optim=OptimConfig(weight_decay=0.0),

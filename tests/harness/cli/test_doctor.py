@@ -215,7 +215,7 @@ class TestWandb:
 def _minimal_cfg(tmp_path: Path, data_root: Path) -> Path:
     cfg = {
         "total_batch_size": 64,
-        "model": {"n_layer": 2, "n_head": 4, "n_embed": 64, "vocab_size": 50304, "block_size": 16},
+        "model": {"n_layer": 2, "n_head": 4, "n_embd": 64, "vocab_size": 50304, "block_size": 16},
         "data": {"root": str(data_root), "batch_size": 2},
         "optim": {"weight_decay": 0.1},
         "schedule": {"max_lr": 6e-4, "min_lr": 6e-5, "warmup_steps": 1, "max_steps": 10},

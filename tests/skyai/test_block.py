@@ -13,33 +13,33 @@ def _make_cos_sin(seq_len: int, head_dim: int, base: float = 100000.0):
 
 
 def test_block_shape_preserving():
-    n_embed, n_head = 128, 4
-    block = Block(n_embed, n_head)
-    head_dim = n_embed // n_head
+    n_embd, n_head = 128, 4
+    block = Block(n_embd, n_head)
+    head_dim = n_embd // n_head
     B, T = 2, 16
-    x = torch.randn(B, T, n_embed)
+    x = torch.randn(B, T, n_embd)
     cos, sin = _make_cos_sin(T, head_dim)
     out = block(x, cos, sin)
-    assert out.shape == (B, T, n_embed)
+    assert out.shape == (B, T, n_embd)
 
 
 def test_block_accepts_gqa():
-    n_embed, n_head, n_kv_head = 128, 8, 2
-    block = Block(n_embed, n_head, n_kv_head=n_kv_head)
-    head_dim = n_embed // n_head
+    n_embd, n_head, n_kv_head = 128, 8, 2
+    block = Block(n_embd, n_head, n_kv_head=n_kv_head)
+    head_dim = n_embd // n_head
     B, T = 2, 16
-    x = torch.randn(B, T, n_embed)
+    x = torch.randn(B, T, n_embd)
     cos, sin = _make_cos_sin(T, head_dim)
     out = block(x, cos, sin)
-    assert out.shape == (B, T, n_embed)
+    assert out.shape == (B, T, n_embd)
 
 
 def test_block_gradient_flow():
-    n_embed, n_head = 64, 4
-    block = Block(n_embed, n_head)
-    head_dim = n_embed // n_head
+    n_embd, n_head = 64, 4
+    block = Block(n_embd, n_head)
+    head_dim = n_embd // n_head
     B, T = 2, 8
-    x = torch.randn(B, T, n_embed, requires_grad=True)
+    x = torch.randn(B, T, n_embd, requires_grad=True)
     cos, sin = _make_cos_sin(T, head_dim)
     out = block(x, cos, sin)
     out.sum().backward()
@@ -50,11 +50,11 @@ def test_block_gradient_flow():
 
 def test_block_residual_is_additive():
     """If we zero the sublayer outputs, the block should be the identity in x."""
-    n_embed, n_head = 64, 4
-    block = Block(n_embed, n_head)
-    head_dim = n_embed // n_head
+    n_embd, n_head = 64, 4
+    block = Block(n_embd, n_head)
+    head_dim = n_embd // n_head
     B, T = 1, 4
-    x = torch.randn(B, T, n_embed)
+    x = torch.randn(B, T, n_embd)
     cos, sin = _make_cos_sin(T, head_dim)
 
     with torch.no_grad():

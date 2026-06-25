@@ -184,7 +184,7 @@ class TestBuildOptimizer:
                 vocab_size=128,
                 n_layer=2,
                 n_head=4,
-                n_embed=64,
+                n_embd=64,
                 logit_softcap=None,
             )
         )
@@ -209,7 +209,7 @@ class TestBuildOptimizer:
                 vocab_size=128,
                 n_layer=2,
                 n_head=4,
-                n_embed=64,
+                n_embd=64,
                 tie_weights=True,
                 logit_softcap=None,
             )

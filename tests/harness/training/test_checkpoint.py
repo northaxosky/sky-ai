@@ -54,7 +54,7 @@ def _make_cfg() -> RunConfig:
             "model": {
                 "n_layer": 2,
                 "n_head": 2,
-                "n_embed": 64,
+                "n_embd": 64,
                 "vocab_size": 50257,
                 "block_size": 64,
             },

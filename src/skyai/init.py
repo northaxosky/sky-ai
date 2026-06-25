@@ -32,7 +32,7 @@ def init_sky_ai_weights(
     wte: nn.Embedding,
     lm_head: nn.Linear,
     blocks: Iterable[nn.Module],
-    n_embed: int,
+    n_embd: int,
     tie_weights: bool,
 ) -> None:
     """Initialize the modern SkyAI architecture policy."""
@@ -43,7 +43,7 @@ def init_sky_ai_weights(
         nn.init.normal_(lm_head.weight, mean=0.0, std=0.001)
         _zero_bias(lm_head)
 
-    attn_input_std = n_embed**-0.5
+    attn_input_std = n_embd**-0.5
     mlp_input_std = 0.4 * attn_input_std
 
     for block in blocks:

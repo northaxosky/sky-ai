@@ -37,7 +37,7 @@ class ModelConfig(BaseModel):
     n_layer: int = Field(gt=0, description="Number of transformer blocks")
     n_head: int = Field(gt=0, description="Number of attention heads")
     n_kv_head: int | None = Field(default=None, gt=0, description="Number of KV heads for GQA")
-    n_embed: int = Field(gt=0, description="Hidden dim, must be divisible by n_head")
+    n_embd: int = Field(gt=0, description="Hidden dim, must be divisible by n_head")
     hidden_multiple: int = Field(default=4, gt=0, description="MLP hidden size multiplier")
     vocab_size: int = Field(gt=0, description="Tokenizer vocabulary size")
     vocab_pad_multiple: int = Field(
@@ -59,11 +59,9 @@ class ModelConfig(BaseModel):
 
     @model_validator(mode="after")
     def _embed_divisible_by_head(self) -> ModelConfig:
-        if self.n_embed % self.n_head != 0:
-            raise ValueError(
-                f"n_embed ({self.n_embed}) must be divisible by n_head ({self.n_head})"
-            )
-        head_dim = self.n_embed // self.n_head
+        if self.n_embd % self.n_head != 0:
+            raise ValueError(f"n_embd ({self.n_embd}) must be divisible by n_head ({self.n_head})")
+        head_dim = self.n_embd // self.n_head
         if head_dim % 2 != 0:
             raise ValueError(f"head_dim ({head_dim}) must be even for RoPE")
         return self

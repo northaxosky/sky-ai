@@ -26,7 +26,7 @@ class GPTConfig:
     n_layer: int = 12
     n_head: int = 12
     n_kv_head: int | None = None
-    n_embed: int = 768
+    n_embd: int = 768
     hidden_multiple: int = 4
     rope_theta: float = 100_000.0
     vocab_pad_multiple: int = 128
@@ -39,7 +39,7 @@ class GPTConfig:
 
     @property
     def head_dim(self) -> int:
-        return self.n_embed // self.n_head
+        return self.n_embd // self.n_head
 
 
 class _Transformer(nn.Module):
@@ -47,12 +47,12 @@ class _Transformer(nn.Module):
 
     def __init__(self, config: GPTConfig) -> None:
         super().__init__()
-        self.wte = nn.Embedding(config.vocab_size_padded, config.n_embed)
-        self.embed_norm = RMSNorm(config.n_embed)
+        self.wte = nn.Embedding(config.vocab_size_padded, config.n_embd)
+        self.embed_norm = RMSNorm(config.n_embd)
         self.h = nn.ModuleList(
             [
                 Block(
-                    n_embed=config.n_embed,
+                    n_embd=config.n_embd,
                     n_head=config.n_head,
                     n_kv_head=config.n_kv_head,
                     hidden_multiple=config.hidden_multiple,
@@ -60,7 +60,7 @@ class _Transformer(nn.Module):
                 for _ in range(config.n_layer)
             ]
         )
-        self.ln_f = RMSNorm(config.n_embed)
+        self.ln_f = RMSNorm(config.n_embd)
 
 
 class GPT(nn.Module):
@@ -73,7 +73,7 @@ class GPT(nn.Module):
         super().__init__()
         self.config = config
         self.transformer = _Transformer(config)
-        self.lm_head = Linear(config.n_embed, config.vocab_size_padded, bias=False)
+        self.lm_head = Linear(config.n_embd, config.vocab_size_padded, bias=False)
 
         if config.tie_weights:
             # Weight tying: token embedding shares weights with output projection
@@ -90,7 +90,7 @@ class GPT(nn.Module):
                 wte=self.transformer.wte,
                 lm_head=self.lm_head,
                 blocks=self.transformer.h,
-                n_embed=config.n_embed,
+                n_embd=config.n_embd,
                 tie_weights=config.tie_weights,
             )
         else:

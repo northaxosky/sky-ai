@@ -44,7 +44,7 @@ def _tiny_gpt(vocab_size: int = 50304) -> GPT:
         GPTConfig(
             n_layer=2,
             n_head=2,
-            n_embed=32,
+            n_embd=32,
             vocab_size=vocab_size,
             block_size=16,
         )
@@ -70,7 +70,7 @@ def _tiny_cfg(tmp_path: Path) -> RunConfig:
         grad_clip=1.0,
         total_batch_size=16,
         # vocab_size must satisfy the gpt2 tokenizer bound (>= 50257, <= 50257+1024)
-        model=ModelConfig(n_layer=2, n_head=2, n_embed=32, vocab_size=50304, block_size=4),
+        model=ModelConfig(n_layer=2, n_head=2, n_embd=32, vocab_size=50304, block_size=4),
         data=DataConfig(root=data_root, batch_size=4),
         optim=OptimConfig(weight_decay=0.0),
         schedule=ScheduleConfig(max_lr=1e-3, min_lr=1e-4, warmup_steps=1, max_steps=10),
@@ -294,7 +294,7 @@ class TestBuildModel:
         from gpt.model import GPT as GPT2
 
         cfg = ModelConfig(
-            family="gpt2", n_layer=2, n_head=2, n_embed=16, vocab_size=50257, block_size=16
+            family="gpt2", n_layer=2, n_head=2, n_embd=16, vocab_size=50257, block_size=16
         )
         assert isinstance(loop.build_model(cfg), GPT2)
 

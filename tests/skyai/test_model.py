@@ -13,7 +13,7 @@ def _tiny_config(**overrides) -> GPTConfig:
         vocab_size=100,
         n_layer=2,
         n_head=4,
-        n_embed=64,
+        n_embd=64,
         logit_softcap=None,
     )
     base.update(overrides)
@@ -42,8 +42,8 @@ def test_vocab_is_padded_to_multiple():
     cfg = _tiny_config(vocab_size=100, vocab_pad_multiple=128)
     assert cfg.vocab_size_padded == 128
     model = GPT(cfg)
-    assert model.lm_head.weight.shape == (128, cfg.n_embed)
-    assert model.transformer.wte.weight.shape == (128, cfg.n_embed)
+    assert model.lm_head.weight.shape == (128, cfg.n_embd)
+    assert model.transformer.wte.weight.shape == (128, cfg.n_embd)
 
 
 def test_forward_excludes_padded_vocab_from_logits():
@@ -92,7 +92,7 @@ def test_rope_tables_are_non_persistent():
 
 
 def test_gqa_config_works():
-    cfg = _tiny_config(n_head=8, n_kv_head=2, n_embed=64)
+    cfg = _tiny_config(n_head=8, n_kv_head=2, n_embd=64)
     model = GPT(cfg)
     idx = torch.randint(0, cfg.vocab_size, (2, 16))
     _, loss = model(idx, idx)

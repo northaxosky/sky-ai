@@ -14,7 +14,7 @@ def _tiny_config(**overrides) -> GPTConfig:
         vocab_pad_multiple=128,
         n_layer=4,
         n_head=4,
-        n_embed=128,
+        n_embd=128,
         logit_softcap=None,
     )
     base.update(overrides)
@@ -59,11 +59,11 @@ def test_sky_ai_policy_uses_width_scaled_inputs() -> None:
     model = GPT(cfg)
     block = model.transformer.h[0]
 
-    _assert_std(block.attn.c_q.weight, cfg.n_embed**-0.5)
-    _assert_std(block.attn.c_k.weight, cfg.n_embed**-0.5)
-    _assert_std(block.attn.c_v.weight, cfg.n_embed**-0.5)
-    _assert_std(block.mlp.gate_proj.weight, 0.4 * cfg.n_embed**-0.5)
-    _assert_std(block.mlp.up_proj.weight, 0.4 * cfg.n_embed**-0.5)
+    _assert_std(block.attn.c_q.weight, cfg.n_embd**-0.5)
+    _assert_std(block.attn.c_k.weight, cfg.n_embd**-0.5)
+    _assert_std(block.attn.c_v.weight, cfg.n_embd**-0.5)
+    _assert_std(block.mlp.gate_proj.weight, 0.4 * cfg.n_embd**-0.5)
+    _assert_std(block.mlp.up_proj.weight, 0.4 * cfg.n_embd**-0.5)
 
 
 def test_sky_ai_policy_zeroes_residual_outputs() -> None:

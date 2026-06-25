@@ -57,7 +57,7 @@ def _golden_cfg(tmp_path: Path) -> RunConfig:
         model=ModelConfig(
             n_layer=2,
             n_head=2,
-            n_embed=16,
+            n_embd=16,
             vocab_size=vocab_size,
             block_size=16,
         ),

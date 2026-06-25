@@ -21,7 +21,7 @@ def tiny_model() -> GPT:
         GPTConfig(
             n_layer=1,
             n_head=2,
-            n_embed=32,
+            n_embd=32,
             vocab_size=50257,
             block_size=16,
         )

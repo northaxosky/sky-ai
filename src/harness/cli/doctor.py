@@ -207,21 +207,21 @@ def _check_checkpoint_dir(cfg: RunConfig) -> CheckResult:
 
 def _estimate_model_params(model: ModelConfig) -> int:
     vocab = _pad_to_multiple(model.tokenizer_vocab_size, model.vocab_pad_multiple)
-    n_embed = model.n_embed
-    head_dim = model.n_embed // model.n_head
+    n_embd = model.n_embd
+    head_dim = model.n_embd // model.n_head
     n_kv_head = model.n_kv_head if model.n_kv_head is not None else model.n_head
     kv_dim = n_kv_head * head_dim
-    mlp_hidden = _aligned_mlp_hidden(model.n_embed, model.hidden_multiple)
+    mlp_hidden = _aligned_mlp_hidden(model.n_embd, model.hidden_multiple)
 
-    embedding_params = vocab * n_embed
-    head_params = 0 if model.tie_weights else vocab * n_embed
-    attention_params = 2 * n_embed * n_embed + 2 * n_embed * kv_dim
-    mlp_params = 3 * n_embed * mlp_hidden
+    embedding_params = vocab * n_embd
+    head_params = 0 if model.tie_weights else vocab * n_embd
+    attention_params = 2 * n_embd * n_embd + 2 * n_embd * kv_dim
+    mlp_params = 3 * n_embd * mlp_hidden
     return embedding_params + head_params + model.n_layer * (attention_params + mlp_params)
 
 
-def _aligned_mlp_hidden(n_embed: int, hidden_multiple: int, align: int = 256) -> int:
-    hidden = int(2 * hidden_multiple * n_embed / 3)
+def _aligned_mlp_hidden(n_embd: int, hidden_multiple: int, align: int = 256) -> int:
+    hidden = int(2 * hidden_multiple * n_embd / 3)
     return _pad_to_multiple(hidden, align)
 
 

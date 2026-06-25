@@ -52,7 +52,7 @@ def _minimal_yaml(tmp_path: Path) -> Path:
         "model": {
             "n_layer": 2,
             "n_head": 4,
-            "n_embed": 64,
+            "n_embd": 64,
             "vocab_size": 50257,
             "block_size": 16,
         },
@@ -146,7 +146,7 @@ class TestSampleEndToEnd:
                 "n_layer": 2,
                 "n_head": 2,
                 "n_kv_head": 1,
-                "n_embed": 32,
+                "n_embd": 32,
                 "hidden_multiple": 8,
                 "vocab_size": 50257,
                 "vocab_pad_multiple": 256,

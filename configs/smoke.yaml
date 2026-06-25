@@ -10,7 +10,7 @@ total_batch_size: 256  # 4 * 64 * 1 rank, grad_accum = 1
 model:
   n_layer: 2
   n_head: 2
-  n_embed: 128
+  n_embd: 128
   block_size: 64
 
 data:

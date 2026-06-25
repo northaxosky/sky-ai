@@ -25,15 +25,15 @@ class CausalSelfAttention(nn.Module):
 
     def __init__(
         self,
-        n_embed: int,
+        n_embd: int,
         n_head: int,
         n_kv_head: int | None = None,
         use_qk_norm: bool = True,
         qk_sharpen: float = 1.2,
     ) -> None:
         super().__init__()
-        if n_embed % n_head != 0:
-            raise ValueError(f"n_embed ({n_embed}) must be divisible by n_head ({n_head})")
+        if n_embd % n_head != 0:
+            raise ValueError(f"n_embd ({n_embd}) must be divisible by n_head ({n_head})")
 
         n_kv_head = n_kv_head if n_kv_head is not None else n_head
         if n_kv_head > n_head:
@@ -43,13 +43,13 @@ class CausalSelfAttention(nn.Module):
 
         self.n_head = n_head
         self.n_kv_head = n_kv_head
-        self.head_dim = n_embed // n_head
+        self.head_dim = n_embd // n_head
         self.qk_sharpen = qk_sharpen
 
-        self.c_q = Linear(n_embed, n_head * self.head_dim, bias=False)
-        self.c_k = Linear(n_embed, n_kv_head * self.head_dim, bias=False)
-        self.c_v = Linear(n_embed, n_kv_head * self.head_dim, bias=False)
-        self.c_proj = ResidualProjection(n_embed, n_embed, bias=False)
+        self.c_q = Linear(n_embd, n_head * self.head_dim, bias=False)
+        self.c_k = Linear(n_embd, n_kv_head * self.head_dim, bias=False)
+        self.c_v = Linear(n_embd, n_kv_head * self.head_dim, bias=False)
+        self.c_proj = ResidualProjection(n_embd, n_embd, bias=False)
 
         self.q_norm = RMSNorm(self.head_dim) if use_qk_norm else nn.Identity()
         self.k_norm = RMSNorm(self.head_dim) if use_qk_norm else nn.Identity()

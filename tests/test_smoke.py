@@ -46,7 +46,7 @@ def _smoke_cfg(tmp_path: Path, *, max_steps: int = 5, evals: list[str] | None = 
         compile=False,
         grad_clip=1.0,
         total_batch_size=256,
-        model=ModelConfig(n_layer=2, n_head=2, n_embed=32, vocab_size=vocab_size, block_size=64),
+        model=ModelConfig(n_layer=2, n_head=2, n_embd=32, vocab_size=vocab_size, block_size=64),
         data=DataConfig(root=data_root, batch_size=4),
         optim=OptimConfig(weight_decay=0.0),
         schedule=ScheduleConfig(max_lr=1e-3, min_lr=1e-4, warmup_steps=1, max_steps=max_steps),

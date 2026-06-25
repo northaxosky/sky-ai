@@ -177,7 +177,7 @@ def build_muon_split_optimizer(
     device_type: str = "cuda",
 ) -> OptimizerChain:
     batch_scale = (total_batch_size / 524288) ** 0.5
-    dim_scale = (model.config.n_embed / 768) ** -0.5
+    dim_scale = (model.config.n_embd / 768) ** -0.5
 
     embedding_params = [model.transformer.wte.weight]
     lm_head_params = [] if model.config.tie_weights else [model.lm_head.weight]

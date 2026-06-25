@@ -12,10 +12,10 @@ from harness.generate import generate
 class _ToyLM(nn.Module):
     """Minimal autoregressive model with the (logits, loss) signature"""
 
-    def __init__(self, vocab_size: int = 10, n_embed: int = 4) -> None:
+    def __init__(self, vocab_size: int = 10, n_embd: int = 4) -> None:
         super().__init__()
-        self.emb = nn.Embedding(vocab_size, n_embed)
-        self.head = nn.Linear(n_embed, vocab_size)
+        self.emb = nn.Embedding(vocab_size, n_embd)
+        self.head = nn.Linear(n_embd, vocab_size)
 
     def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, None]:
         h = self.emb(x)

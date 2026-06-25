@@ -30,7 +30,7 @@ def _write_base_config(tmp_path: Path) -> Path:
         "model": {
             "n_layer": 2,
             "n_head": 2,
-            "n_embed": 32,
+            "n_embd": 32,
             "vocab_size": 50257,
             "block_size": 64,
         },

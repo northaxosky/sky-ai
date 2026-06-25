@@ -6,7 +6,7 @@ model:
   n_layer: 48
   n_head: 32
   n_kv_head: 8
-  n_embed: 1536
+  n_embd: 1536
   block_size: 2048
 
 data:

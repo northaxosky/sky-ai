@@ -25,7 +25,7 @@ def _valid_run_dict() -> dict:
         "model": {
             "n_layer": 2,
             "n_head": 2,
-            "n_embed": 64,
+            "n_embd": 64,
             "vocab_size": 50257,
             "block_size": 64,
         },
@@ -62,7 +62,7 @@ total_batch_size: 256
 model:
     n_layer: 2
     n_head: 2
-    n_embed: 64
+    n_embd: 64
     vocab_size: 50257
     block_size: 64
 data:
@@ -107,7 +107,7 @@ def _write_yaml(tmp_path: Path, name: str, body: str) -> Path:
 class TestSchema:
     def test_minimal_valid(self) -> None:
         cfg = RunConfig.model_validate(_valid_run_dict())
-        assert cfg.model.n_embed == 64
+        assert cfg.model.n_embd == 64
         assert cfg.optim.betas == (0.9, 0.95)
 
     def test_model_defaults_include_modern_arch_fields(self) -> None:
@@ -168,7 +168,7 @@ class TestSchema:
     def test_n_kv_head_must_divide_n_head(self) -> None:
         d = _valid_run_dict()
         d["model"]["n_head"] = 6
-        d["model"]["n_embed"] = 60
+        d["model"]["n_embd"] = 60
         d["model"]["n_kv_head"] = 4
         with pytest.raises(ValidationError, match="n_kv_head"):
             RunConfig.model_validate(d)
@@ -179,16 +179,16 @@ class TestSchema:
         assert isinstance(cfg.log.dir, Path)
         assert isinstance(cfg.checkpoint.dir, Path)
 
-    def test_model_n_embed_not_divisible_by_n_head(self) -> None:
+    def test_model_n_embd_not_divisible_by_n_head(self) -> None:
         d = _valid_run_dict()
-        d["model"]["n_embed"] = 65
-        with pytest.raises(ValidationError, match="n_embed"):
+        d["model"]["n_embd"] = 65
+        with pytest.raises(ValidationError, match="n_embd"):
             RunConfig.model_validate(d)
 
     def test_model_head_dim_must_be_even_for_rope(self) -> None:
         d = _valid_run_dict()
         d["model"]["n_head"] = 2
-        d["model"]["n_embed"] = 66
+        d["model"]["n_embd"] = 66
         with pytest.raises(ValidationError, match="head_dim"):
             RunConfig.model_validate(d)
 
@@ -326,11 +326,11 @@ class TestLoader:
             """
             extends: base.yaml
             model:
-                n_embed: 128
+                n_embd: 128
         """,
         )
         cfg = load_config(tmp_path / "child.yaml")
-        assert cfg.model.n_embed == 128  # overridden
+        assert cfg.model.n_embd == 128  # overridden
         assert cfg.model.n_layer == 2  # inherited (deep merge, not replace)
         assert cfg.model.n_head == 2  # inherited
 
@@ -389,8 +389,8 @@ class TestOverrides:
 
     def test_nested_override(self, tmp_path: Path) -> None:
         path = _write_yaml(tmp_path, "cfg.yaml", _full_yaml_body())
-        cfg = load_config(path, overrides=["model.n_embed=128"])
-        assert cfg.model.n_embed == 128
+        cfg = load_config(path, overrides=["model.n_embd=128"])
+        assert cfg.model.n_embd == 128
 
     def test_deeply_nested_override(self, tmp_path: Path) -> None:
         path = _write_yaml(tmp_path, "cfg.yaml", _full_yaml_body())

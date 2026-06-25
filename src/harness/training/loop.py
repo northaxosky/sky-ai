@@ -113,7 +113,7 @@ def build_gpt_config(model_cfg: ModelConfig) -> GPTConfig:
         n_layer=model_cfg.n_layer,
         n_head=model_cfg.n_head,
         n_kv_head=model_cfg.n_kv_head,
-        n_embed=model_cfg.n_embed,
+        n_embd=model_cfg.n_embd,
         hidden_multiple=model_cfg.hidden_multiple,
         vocab_size=model_cfg.tokenizer_vocab_size,
         vocab_pad_multiple=model_cfg.vocab_pad_multiple,
@@ -136,7 +136,7 @@ def build_model(model_cfg: ModelConfig) -> nn.Module:
             Gpt2Config(
                 n_layer=model_cfg.n_layer,
                 n_head=model_cfg.n_head,
-                n_embd=model_cfg.n_embed,
+                n_embd=model_cfg.n_embd,
                 vocab_size=model_cfg.vocab_size,
                 block_size=model_cfg.block_size,
             )
@@ -223,7 +223,7 @@ _RESUME_CRITICAL_FIELDS: list[tuple[str, Any]] = [
     ("model.n_layer", lambda c: c.model.n_layer),
     ("model.n_head", lambda c: c.model.n_head),
     ("model.n_kv_head", lambda c: c.model.n_kv_head),
-    ("model.n_embed", lambda c: c.model.n_embed),
+    ("model.n_embd", lambda c: c.model.n_embd),
     ("model.hidden_multiple", lambda c: c.model.hidden_multiple),
     ("model.vocab_size", lambda c: c.model.vocab_size),
     ("model.vocab_pad_multiple", lambda c: c.model.vocab_pad_multiple),

@@ -1,0 +1,24 @@
+# Lean single-4090 proxy base for the Muon matrix-LR sweep (sweep-muon-lr.yaml drives it).
+# Mirrors gpt2-adamw-proxy.yaml's budget so the two recipes are compared at the same
+# token budget. Inherits the muon-split optimizer + WSD schedule from gpt2-muon.yaml.
+extends: gpt2-muon.yaml
+
+data:
+  batch_size: 16          # 4090-sized micro-batch; grad_accum auto-fills to 0.5M tokens/step (=32)
+
+schedule:
+  warmup_steps: 20
+  max_steps: 200          # keep identical to the AdamW proxy budget
+
+eval:
+  interval: 50
+  val_steps: 20
+  evals: []               # skip HellaSwag for the proxy; we compare validation loss
+
+log:
+  wandb: false
+  dir: logs/proxy/gpt2-muon
+
+checkpoint:
+  dir: checkpoints/proxy/gpt2-muon
+  every_n_steps: 1000000  # effectively off for the proxy

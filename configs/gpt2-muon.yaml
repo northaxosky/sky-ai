@@ -1,0 +1,35 @@
+# gpt2-muon (124M) — the faithful GPT-2 architecture trained with the Muon-split
+# optimizer + warmup-stable-decay schedule instead of AdamW + cosine. The MODEL is
+# byte-identical to gpt2.yaml; only the training recipe differs. This is the "Muon
+# recipe" side of the AdamW-vs-Muon comparison.
+#
+# Why WSD and not cosine: muon-split scales each parameter group's own base LR
+# (matrix_lr / embedding_lr / unembedding_lr) by the schedule's multiplier. The loop's
+# warmup-stable-decay path does `pg.lr = pg.initial_lr * mult`, preserving the split;
+# the cosine path overwrites every group with one absolute LR, erasing it. So muon-split
+# MUST use warmup-stable-decay here.
+extends: gpt2.yaml
+
+optim:
+  type: muon-split
+  weight_decay: 0.28
+  matrix_lr: 0.02          # Muon: the 2D hidden matrices (canonical Keller Jordan default)
+  embedding_lr: 0.3        # AdamW group: input embedding (sparse grads -> deliberately high)
+  unembedding_lr: 0.008    # AdamW group: lm_head — tied to wte on gpt2, so this is unused here
+  muon_momentum: 0.95
+  muon_beta2: 0.9
+  muon_ns_steps: 5
+
+schedule:
+  type: warmup-stable-decay
+  max_lr: 1.0              # nominal: muon-split scales each group's own base LR by the WSD multiplier
+  min_lr: 0.0
+  warmdown_ratio: 0.4     # decay over the final 40% of steps
+  final_lr_frac: 0.0      # decay to zero
+  # warmup_steps (715) and max_steps (19073) inherited from gpt2.yaml to match the baseline
+
+log:
+  dir: logs/gpt2-muon
+
+checkpoint:
+  dir: checkpoints/gpt2-muon

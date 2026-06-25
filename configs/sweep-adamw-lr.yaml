@@ -1,0 +1,6 @@
+# AdamW peak-LR sweep for faithful gpt2 (lean 4090 proxy).
+# Run: uv run skyai ablate --spec configs/sweep-adamw-lr.yaml --output-dir runs/proxy-adamw
+# Karpathy's 6e-4 is conservative for 124M; probe the headroom above it.
+base_config: gpt2-adamw-proxy.yaml
+sweep:
+  schedule.max_lr: [6.0e-4, 1.2e-3, 1.8e-3]

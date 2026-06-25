@@ -1,0 +1,25 @@
+# Lean single-4090 proxy base for the AdamW peak-LR sweep (sweep-adamw-lr.yaml drives it).
+# Short budget + no HellaSwag + small micro-batch so the whole sweep fits in a few hours.
+# Tune `schedule.max_steps` to your time budget AFTER running configs/gpt2-bench.yaml:
+#   max_steps ≈ minutes_per_variant * 60 * tok_per_sec / 524288
+extends: gpt2.yaml
+
+data:
+  batch_size: 16          # 4090-sized micro-batch; grad_accum auto-fills to 0.5M tokens/step (=32)
+
+schedule:
+  warmup_steps: 20
+  max_steps: 200          # ~100M tokens at 0.5M/step — a "see the trend + rank LRs" budget, not a verdict
+
+eval:
+  interval: 50
+  val_steps: 20
+  evals: []               # skip HellaSwag for the proxy; we compare validation loss
+
+log:
+  wandb: false
+  dir: logs/proxy/gpt2-adamw
+
+checkpoint:
+  dir: checkpoints/proxy/gpt2-adamw
+  every_n_steps: 1000000  # effectively off for the proxy

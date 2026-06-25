@@ -10,12 +10,12 @@ from typing import Annotated
 import torch
 import typer
 
-from harness.checkpoint import load_checkpoint
+from harness.checkpoint import CheckpointBundle, load_checkpoint
 from harness.config.loader import load_config
 from harness.config.schema import LogConfig, RunConfig
 from harness.log import get_logger, setup_logging
 from harness.sample import sample as sample_fn
-from harness.training.loop import build_model
+from harness.training.loop import DTYPE_MAP, build_model
 
 app = typer.Typer(
     name="skyai",
@@ -38,6 +38,17 @@ def _setup_run(cfg_path: Path, overrides: list[str], *, log_name: str) -> RunCon
     cfg.log.dir.mkdir(parents=True, exist_ok=True)
     setup_logging(cfg.log, rank=rank, log_path=cfg.log.dir / log_name)
     return cfg
+
+
+def _load_model_for_inference(
+    checkpoint: Path, device: str
+) -> tuple[torch.nn.Module, CheckpointBundle]:
+    """Load a checkpoint, build its model, restore weights, and switch to eval mode."""
+    bundle = load_checkpoint(checkpoint)
+    model = build_model(bundle.config.model)
+    model.load_state_dict(bundle.model_state)
+    model.to(device).eval()
+    return model, bundle
 
 
 @app.callback()
@@ -85,16 +96,10 @@ def evaluate(
     from harness.eval import run_evals
 
     cfg = _setup_run(config, override or [], log_name="eval.log")
-    bundle = load_checkpoint(checkpoint)
-
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    mc = bundle.config.model
-    model = build_model(mc)
-    model.load_state_dict(bundle.model_state)
-    model.to(device).eval()
+    model, bundle = _load_model_for_inference(checkpoint, device)
 
-    dtype_map = {"float32": torch.float32, "bfloat16": torch.bfloat16, "float16": torch.float16}
-    dtype = dtype_map[cfg.dtype]
+    dtype = DTYPE_MAP[cfg.dtype]
     enc = tiktoken.get_encoding(bundle.config.model.tokenizer)
 
     logger.info(f"eval: ckpt step={bundle.step}, {device=}, {cfg.dtype=}, evals={cfg.eval.evals}")
@@ -130,11 +135,8 @@ def sample(
     if device == "auto":
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    bundle = load_checkpoint(checkpoint)
+    model, bundle = _load_model_for_inference(checkpoint, device)
     mc = bundle.config.model
-    model = build_model(mc)
-    model.load_state_dict(bundle.model_state)
-    model.to(device).eval()
 
     enc = tiktoken.get_encoding(mc.tokenizer)
 

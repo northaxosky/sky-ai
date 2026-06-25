@@ -35,7 +35,7 @@ from harness.training.schedule import CosineSchedule, WarmupStableDecaySchedule
 from harness.wandb_logger import WandbLogger
 from skyai.model import GPT, GPTConfig
 
-_DTYPE_MAP: dict[str, torch.dtype] = {
+DTYPE_MAP: dict[str, torch.dtype] = {
     "float32": torch.float32,
     "bfloat16": torch.bfloat16,
     "float16": torch.float16,
@@ -449,7 +449,7 @@ def train(cfg: RunConfig, *, resume: bool = False) -> dict[str, Any] | None:
     dist_info = _init_distributed()
     device = _resolve_device(dist_info.local_rank)
     device_type = "cuda" if device.startswith("cuda") else "cpu"
-    dtype = _DTYPE_MAP[cfg.dtype]
+    dtype = DTYPE_MAP[cfg.dtype]
 
     _set_seeds(cfg.seed)
     torch.set_float32_matmul_precision("high")

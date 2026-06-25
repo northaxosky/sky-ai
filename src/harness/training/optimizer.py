@@ -107,6 +107,18 @@ class Muon(torch.optim.Optimizer):
         return loss
 
 
+def _build_adamw(
+    groups: list[dict[str, Any]], *, device_type: str, **kwargs: Any
+) -> torch.optim.AdamW:
+    """Construct AdamW, enabling the fused kernel only when supported and on CUDA.
+
+    Older PyTorch builds without fused AdamW would TypeError on the kwarg.
+    """
+    if "fused" in inspect.signature(torch.optim.AdamW).parameters and device_type == "cuda":
+        kwargs["fused"] = True
+    return torch.optim.AdamW(groups, **kwargs)
+
+
 def build_optimizer(
     model: nn.Module,
     *,
@@ -153,14 +165,9 @@ def build_optimizer(
         {"params": nodecay_params, "weight_decay": 0.0, "name": "adamw_nodecay"},
     ]
 
-    # Only pass fused= when AdamW supports it AND we're on cuda. Older PyTorch
-    # builds without fused AdamW would TypeError if we always passed the kwarg.
-    kwargs: dict[str, Any] = {"lr": learning_rate, "betas": betas, "eps": eps}
-    fused_available = "fused" in inspect.signature(torch.optim.AdamW).parameters
-    if fused_available and device_type == "cuda":
-        kwargs["fused"] = True
-
-    return torch.optim.AdamW(optim_groups, **kwargs)
+    return _build_adamw(
+        optim_groups, device_type=device_type, lr=learning_rate, betas=betas, eps=eps
+    )
 
 
 def build_muon_split_optimizer(
@@ -220,11 +227,9 @@ def build_muon_split_optimizer(
             )
         )
 
-    kwargs: dict[str, Any] = {"betas": (0.8, 0.995), "eps": 1e-10}
-    if "fused" in inspect.signature(torch.optim.AdamW).parameters and device_type == "cuda":
-        kwargs["fused"] = True
-
-    optimizers: list[torch.optim.Optimizer] = [torch.optim.AdamW(adam_groups, **kwargs)]
+    optimizers: list[torch.optim.Optimizer] = [
+        _build_adamw(adam_groups, device_type=device_type, betas=(0.8, 0.995), eps=1e-10)
+    ]
 
     by_shape: dict[tuple[int, ...], list[nn.Parameter]] = {}
     for p in muon_params:

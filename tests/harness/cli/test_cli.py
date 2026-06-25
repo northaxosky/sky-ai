@@ -33,6 +33,14 @@ def _reset_root_logger():
     root.setLevel(saved_level)
 
 
+@pytest.fixture(autouse=True)
+def _wide_terminal(monkeypatch):
+    """Force a wide terminal so Rich-rendered --help output doesn't wrap option
+    names. CI has no TTY and defaults to 80 columns, which splits flags like
+    '--config' across lines and breaks the substring assertions in TestHelp."""
+    monkeypatch.setenv("COLUMNS", "200")
+
+
 def _minimal_yaml(tmp_path: Path) -> Path:
     """Write a minimal but valid RunCOnfig YAML and return its path"""
     cfg = {

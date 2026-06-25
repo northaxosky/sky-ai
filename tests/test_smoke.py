@@ -7,7 +7,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-import torch
 
 from harness.config.schema import (
     CheckpointConfig,
@@ -21,7 +20,7 @@ from harness.config.schema import (
 )
 from harness.training import loop
 
-pytestmark = pytest.mark.slow
+pytestmark = [pytest.mark.slow, pytest.mark.usefixtures("force_cpu")]
 
 
 def _make_smoke_shards(data_root: Path, vocab_size: int, n_tokens: int = 4096) -> None:
@@ -60,12 +59,6 @@ def _smoke_cfg(tmp_path: Path, *, max_steps: int = 5, evals: list[str] | None = 
             best_direction="min",
         ),
     )
-
-
-@pytest.fixture(autouse=True)
-def _force_cpu(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Pin smoke to CPU regardless of CUDA availability on the host"""
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
 
 
 class TestEndToEndSmoke:

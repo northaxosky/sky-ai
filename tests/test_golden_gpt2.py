@@ -6,9 +6,7 @@ import json
 import os
 from pathlib import Path
 
-import numpy as np
 import pytest
-import torch
 
 from harness.config.schema import (
     CheckpointConfig,
@@ -20,28 +18,18 @@ from harness.config.schema import (
     RunConfig,
     ScheduleConfig,
 )
-from harness.training import loop
+from tests.golden_support import compare_metrics, make_golden_shards, run_golden
 
 FIXTURE_PATH = Path(__file__).parent / "fixtures" / "golden_gpt2_short.json"
 REGEN = os.environ.get("REGENERATE_GOLDEN") == "1"
 IN_CI = os.environ.get("CI") == "true"
 
-
-@pytest.fixture(autouse=True)
-def _force_cpu(monkeypatch):
-    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
-
-
-def _make_golden_shards(data_root: Path, n_tokens: int = 2048) -> None:
-    data_root.mkdir(parents=True, exist_ok=True)
-    rng = np.random.default_rng(123)
-    np.save(data_root / "train_000.npy", rng.integers(0, 32, size=n_tokens, dtype=np.uint16))
-    np.save(data_root / "val_000.npy", rng.integers(0, 32, size=n_tokens, dtype=np.uint16))
+pytestmark = pytest.mark.usefixtures("force_cpu")
 
 
 def _golden_cfg(tmp_path: Path) -> RunConfig:
     data_root = tmp_path / "data"
-    _make_golden_shards(data_root)
+    make_golden_shards(data_root)
     return RunConfig(
         seed=42,
         dtype="float32",
@@ -67,24 +55,6 @@ def _golden_cfg(tmp_path: Path) -> RunConfig:
     )
 
 
-def _run_golden(tmp_path: Path) -> dict:
-    metrics = loop.train(_golden_cfg(tmp_path))
-    assert metrics is not None, "train() returned None on master rank"
-    return metrics
-
-
-def _compare(actual: dict, expected: dict, atol: float = 1e-5) -> None:
-    assert len(actual["step_losses"]) == len(expected["step_losses"])
-    for i, (a, e) in enumerate(zip(actual["step_losses"], expected["step_losses"], strict=True)):
-        assert a == pytest.approx(e, abs=atol), f"step {i}: {a} != {e}"
-    assert actual["final_val_loss"] == pytest.approx(expected["final_val_loss"], abs=atol)
-    assert actual["sample_text"] == expected["sample_text"], "sample_text drift"
-    ac, ec = actual["param_checksum"], expected["param_checksum"]
-    assert ac["n_params"] == ec["n_params"]
-    assert ac["sum"] == pytest.approx(ec["sum"], abs=1e-3)
-    assert ac["norm"] == pytest.approx(ec["norm"], abs=1e-3)
-
-
 @pytest.mark.slow
 @pytest.mark.skipif(REGEN, reason="Skipped during fixture regeneration")
 @pytest.mark.skipif(
@@ -97,11 +67,11 @@ def test_gpt2_golden_matches_fixture(tmp_path: Path) -> None:
     )
     with FIXTURE_PATH.open() as f:
         expected = json.load(f)
-    _compare(_run_golden(tmp_path), expected)
+    compare_metrics(run_golden(_golden_cfg(tmp_path)), expected)
 
 
 @pytest.mark.skipif(not REGEN, reason="Set REGENERATE_GOLDEN=1 to regenerate")
 def test_regenerate_gpt2_golden(tmp_path: Path) -> None:
     FIXTURE_PATH.parent.mkdir(parents=True, exist_ok=True)
     with FIXTURE_PATH.open("w") as f:
-        json.dump(_run_golden(tmp_path), f, indent=2)
+        json.dump(run_golden(_golden_cfg(tmp_path)), f, indent=2)

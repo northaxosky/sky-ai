@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
-import logging
 import re
 from importlib.metadata import version as _pkg_version
 from pathlib import Path
@@ -13,6 +11,8 @@ import yaml
 from typer.testing import CliRunner
 
 from harness.cli.main import app
+
+pytestmark = pytest.mark.usefixtures("reset_root_logger")
 
 runner = CliRunner()
 
@@ -26,23 +26,6 @@ _ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 def _plain(result) -> str:
     """CLI output with ANSI color codes removed."""
     return _ANSI_RE.sub("", result.output)
-
-
-@pytest.fixture(autouse=True)
-def _reset_root_logger():
-    """Save/restore root logger handlers around each test so state doesnt leak"""
-    root = logging.getLogger()
-    saved_handlers = list(root.handlers)
-    saved_level = root.level
-    root.handlers.clear()
-    yield
-
-    for handler in list(root.handlers):
-        with contextlib.suppress(Exception):
-            handler.close()
-    root.handlers.clear()
-    root.handlers.extend(saved_handlers)
-    root.setLevel(saved_level)
 
 
 def _minimal_yaml(tmp_path: Path) -> Path:

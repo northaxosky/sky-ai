@@ -2,14 +2,7 @@ import pytest
 import torch
 
 from skyai.attention import CausalSelfAttention, apply_rotary_emb
-
-
-def _make_cos_sin(seq_len: int, head_dim: int, base: float = 100000.0):
-    """Build broadcastable (1, T, 1, head_dim/2) cos/sin tables for RoPE."""
-    inv_freq = 1.0 / (base ** (torch.arange(0, head_dim, 2).float() / head_dim))
-    pos = torch.arange(seq_len).float()
-    angles = torch.outer(pos, inv_freq)
-    return angles.cos()[None, :, None, :], angles.sin()[None, :, None, :]
+from tests.skyai._rope import make_cos_sin
 
 
 def test_apply_rotary_emb_preserves_magnitude():
@@ -17,7 +10,7 @@ def test_apply_rotary_emb_preserves_magnitude():
     torch.manual_seed(0)
     B, T, H, D = 1, 8, 2, 32
     x = torch.randn(B, T, H, D)
-    cos, sin = _make_cos_sin(T, D)
+    cos, sin = make_cos_sin(T, D)
     y = apply_rotary_emb(x, cos, sin)
     x_norms = x.norm(dim=-1)
     y_norms = y.norm(dim=-1)
@@ -30,7 +23,7 @@ def test_attention_shape_preserves_mha():
     head_dim = n_embd // n_head
     B, T = 2, 16
     x = torch.randn(B, T, n_embd)
-    cos, sin = _make_cos_sin(T, head_dim)
+    cos, sin = make_cos_sin(T, head_dim)
     out = attn(x, cos, sin)
     assert out.shape == (B, T, n_embd)
 
@@ -42,7 +35,7 @@ def test_attention_shape_preserves_gqa():
     head_dim = n_embd // n_head
     B, T = 2, 16
     x = torch.randn(B, T, n_embd)
-    cos, sin = _make_cos_sin(T, head_dim)
+    cos, sin = make_cos_sin(T, head_dim)
     out = attn(x, cos, sin)
     assert out.shape == (B, T, n_embd)
 
@@ -55,7 +48,7 @@ def test_attention_is_causal():
     head_dim = n_embd // n_head
     B, T = 1, 8
     x = torch.randn(B, T, n_embd)
-    cos, sin = _make_cos_sin(T, head_dim)
+    cos, sin = make_cos_sin(T, head_dim)
 
     out_a = attn(x, cos, sin)
     x2 = x.clone()
@@ -71,7 +64,7 @@ def test_attention_gradient_flow():
     head_dim = n_embd // n_head
     B, T = 2, 8
     x = torch.randn(B, T, n_embd, requires_grad=True)
-    cos, sin = _make_cos_sin(T, head_dim)
+    cos, sin = make_cos_sin(T, head_dim)
     out = attn(x, cos, sin)
     out.sum().backward()
     assert x.grad is not None and x.grad.abs().sum() > 0
@@ -95,6 +88,6 @@ def test_attention_qk_norm_disabled():
     head_dim = 64 // 4
     B, T = 1, 4
     x = torch.randn(B, T, 64)
-    cos, sin = _make_cos_sin(T, head_dim)
+    cos, sin = make_cos_sin(T, head_dim)
     out = attn(x, cos, sin)
     assert torch.isfinite(out).all()

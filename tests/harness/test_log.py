@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import logging
 from pathlib import Path
 from typing import Literal
@@ -12,22 +11,7 @@ import pytest
 from harness.config.schema import LogConfig
 from harness.log import _RankFilter, get_logger, setup_logging
 
-
-@pytest.fixture(autouse=True)
-def _reset_root_logger():
-    """Save/restore root logger handlers around each test so state doesnt leak"""
-    root = logging.getLogger()
-    saved_handlers = list(root.handlers)
-    saved_level = root.level
-    root.handlers.clear()
-    yield
-
-    for handler in list(root.handlers):
-        with contextlib.suppress(Exception):
-            handler.close()
-    root.handlers.clear()
-    root.handlers.extend(saved_handlers)
-    root.setLevel(saved_level)
+pytestmark = pytest.mark.usefixtures("reset_root_logger")
 
 
 def _make_cfg(

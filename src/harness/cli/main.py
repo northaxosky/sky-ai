@@ -99,7 +99,7 @@ def evaluate(
 
     logger.info(f"eval: ckpt step={bundle.step}, {device=}, {cfg.dtype=}, evals={cfg.eval.evals}")
     results = run_evals(
-        cfg.evals.evals,
+        cfg.eval.evals,
         model,
         encoder=enc,
         device=device,

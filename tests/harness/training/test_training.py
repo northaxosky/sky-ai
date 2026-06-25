@@ -6,6 +6,8 @@ import pytest
 import torch
 import torch.nn as nn
 
+from harness.config.schema import ModelConfig
+from harness.training.loop import build_model
 from harness.training.optimizer import Muon, OptimizerChain, build_optimizer
 from harness.training.schedule import CosineSchedule, WarmupStableDecaySchedule
 from skyai.model import GPT, GPTConfig
@@ -223,6 +225,26 @@ class TestBuildOptimizer:
         )
         grouped = [p for group in opt.param_groups for p in group["params"]]
         assert sum(1 for p in grouped if p is model.transformer.wte.weight) == 1
+
+    def test_muon_split_builds_on_gpt2(self) -> None:
+        """gpt2 hardcodes weight tying and has no tie_weights config flag; muon-split
+        must still build, with the shared embedding counted exactly once."""
+        model = build_model(
+            ModelConfig(
+                family="gpt2", n_layer=2, n_head=4, n_embd=64, vocab_size=50257, block_size=16
+            )
+        )
+        opt = build_optimizer(
+            model,
+            optimizer_type="muon-split",
+            learning_rate=1e-3,
+            weight_decay=0.28,
+            device_type="cpu",
+        )
+        assert isinstance(opt, OptimizerChain)
+        grouped = [p for group in opt.param_groups for p in group["params"]]
+        assert sum(1 for p in grouped if p is model.transformer.wte.weight) == 1
+        assert {id(p) for p in grouped} == {id(p) for p in model.parameters() if p.requires_grad}
 
 
 class TestWarmupStableDecaySchedule:

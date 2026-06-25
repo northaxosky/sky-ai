@@ -187,7 +187,10 @@ def build_muon_split_optimizer(
     dim_scale = (model.config.n_embd / 768) ** -0.5
 
     embedding_params = [model.transformer.wte.weight]
-    lm_head_params = [] if model.config.tie_weights else [model.lm_head.weight]
+
+    # Detect tying by tensor identity, not a config flag
+    tied = model.lm_head.weight is model.transformer.wte.weight
+    lm_head_params = [] if tied else [model.lm_head.weight]
     reserved_ids = {id(p) for p in embedding_params + lm_head_params}
 
     muon_params: list[nn.Parameter] = []

@@ -1,8 +1,49 @@
-# GPT-2 (124M)
-extends: base.yaml
+# gpt2 (124M) — faithful GPT-2, and the anchor every other config extends.
+# AdamW + cosine LR, 0.5M-token effective batch, ~one epoch over 10B FineWeb-Edu tokens.
+
+seed: 1337
+dtype: bfloat16
+compile: true
+grad_clip: 1.0
+total_batch_size: 524288  # 2^19 tokens per optimizer step
 
 model:
-  family: gpt2    # swaps the modern stack for failthful GPT-2
+  family: gpt2
+  n_layer: 12
+  n_head: 12
+  n_embed: 768
+  vocab_size: 50304  # 50257 padded to a multiple of 128 for tensor-core alignment
+  block_size: 1024
+
+data:
+  root: data/edu_fineweb10B
+  train_split: train
+  val_split: val
+  batch_size: 64  # 64 * 1024 * 8 ranks = 524288, grad_accum = 1 on 8 GPUs
+
+optim:
+  weight_decay: 0.1
+  betas: [0.9, 0.95]
+  eps: 1.0e-8
+
+schedule:
+  max_lr: 6.0e-4
+  min_lr: 6.0e-5
+  warmup_steps: 715
+  max_steps: 19073  # one epoch over 10B tokens at 524288 tokens/step
+
+eval:
+  interval: 250
+  val_steps: 20
+  evals: [hellaswag]
+
+log:
+  dir: logs/gpt2
+  level: INFO
+  wandb: true
+  wandb_project: skyai
 
 checkpoint:
   dir: checkpoints/gpt2
+  every_n_steps: 5000
+  keep_last_n: 3

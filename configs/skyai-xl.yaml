@@ -1,57 +1,23 @@
-## First SkyAI-XL config: ~1.5B modern decoder on 8x H100.
-## Data is expected to be tokenized from ClimbMix with scripts/shard_text.py.
-
-seed: 1337
-dtype: bfloat16
-compile: true
-grad_clip: null
-total_batch_size: 524288    # 2^19 tokens per optim step
+# skyai-xl (~1.5B) — the scale-up of skyai. Only dimensions, data, and budget change.
+# Data is expected to be tokenized from ClimbMix with scripts/shard_text.py.
+extends: skyai.yaml
 
 model:
   n_layer: 48
   n_head: 32
   n_kv_head: 8
   n_embed: 1536
-  hidden_multiple: 4
-  vocab_size: 100352        # cl100k padded to 128
-  vocab_pad_multiple: 128
   block_size: 2048
-  rope_theta: 100000.0
-  tokenizer: cl100k_base
-  tie_weights: false
-  logit_softcap: 15.0
-  init_policy: sky-ai
 
 data:
   root: data/climbmix_cl100k
-  train_split: train
-  val_split: val
   batch_size: 16
 
-optim:
-  type: muon-split
-  weight_decay: 0.28
-  betas: [0.9, 0.95]
-  eps: 1.0e-8
-  embedding_lr: 0.3
-  unembedding_lr: 0.008
-  matrix_lr: 0.02
-  muon_momentum: 0.95
-  muon_beta2: 0.9
-  muon_ns_steps: 5
-
 schedule:
-  type: warmup-stable-decay
-  max_lr: 1.0
-  min_lr: 0.0
-  warmup_steps: 40
   max_steps: 57220
-  warmdown_ratio: 0.65
-  final_lr_frac: 0.05
 
 eval:
   interval: 1000
-  val_steps: 20
   evals: [hellaswag, lambada]
   sample_prompt: "Hello, I'm a language model,"
   sample_n: 4
@@ -59,13 +25,8 @@ eval:
 
 log:
   dir: logs/skyai-xl
-  level: INFO
-  wandb: true
-  wandb_project: skyai
 
 checkpoint:
   dir: checkpoints/skyai-xl
-  every_n_steps: 5000
-  keep_last_n: 3
   best_metric: val_loss
   best_direction: min

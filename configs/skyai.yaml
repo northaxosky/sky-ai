@@ -1,0 +1,44 @@
+# skyai (124M modern) — the modernization of gpt2. This file IS the diff:
+# RMSNorm / RoPE / SwiGLU / GQA, Muon + warmup-stable-decay, cl100k — at the same 124M scale.
+extends: gpt2.yaml
+
+grad_clip: null  # modern recipe does not clip gradients
+
+model:
+  family: modern
+  n_kv_head: 3              # 12 query heads -> 4:1 GQA
+  hidden_multiple: 4
+  vocab_size: 100352        # cl100k_base n_vocab=100277 padded to 128
+  vocab_pad_multiple: 128
+  rope_theta: 100000.0
+  tokenizer: cl100k_base
+  tie_weights: false
+  logit_softcap: 15.0
+  init_policy: sky-ai
+
+data:
+  root: data/fineweb_cl100k
+
+optim:
+  type: muon-split
+  weight_decay: 0.28
+  embedding_lr: 0.3
+  unembedding_lr: 0.008
+  matrix_lr: 0.02
+  muon_momentum: 0.95
+  muon_beta2: 0.9
+  muon_ns_steps: 5
+
+schedule:
+  type: warmup-stable-decay
+  max_lr: 1.0
+  min_lr: 0.0
+  warmup_steps: 40
+  warmdown_ratio: 0.65
+  final_lr_frac: 0.05
+
+log:
+  dir: logs/skyai
+
+checkpoint:
+  dir: checkpoints/skyai

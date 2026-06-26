@@ -1,6 +1,0 @@
-# Muon matrix-LR sweep for faithful gpt2 (lean 4090 proxy).
-# Run: uv run skyai ablate --spec configs/sweep-muon-lr.yaml --output-dir runs/proxy-muon
-# Center on the canonical 0.02; Muon's matrix LR sits ~30x above an AdamW matrix LR.
-base_config: gpt2-muon-proxy.yaml
-sweep:
-  optim.matrix_lr: [0.01, 0.02, 0.04]

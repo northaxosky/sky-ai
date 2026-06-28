@@ -13,10 +13,11 @@ from harness.wandb_logger import WandbLogger
 
 @pytest.fixture
 def mock_wandb(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
-    """Replace the wandb module with a Magic Mock"""
+    """Replace the wandb module with a MagicMock and provide a fake key so the auth guard passes"""
     mock = MagicMock()
     mock.util.generate_id.return_value = "auto-id-123"
     monkeypatch.setattr("harness.wandb_logger.wandb", mock)
+    monkeypatch.setenv("WANDB_API_KEY", "test-key")
     return mock
 
 
@@ -107,6 +108,25 @@ class TestEnabled:
         wb.finish()
         wb.finish()
         mock_wandb.finish.assert_called_once()
+
+
+class TestAuthGuard:
+    def test_raises_when_enabled_without_api_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Enabled + no WANDB_API_KEY must fail fast, not hang on wandb.init's login prompt."""
+        monkeypatch.setattr("harness.wandb_logger.wandb", MagicMock())
+        monkeypatch.delenv("WANDB_API_KEY", raising=False)
+        monkeypatch.delenv("WANDB_MODE", raising=False)
+        with pytest.raises(RuntimeError, match="WANDB_API_KEY"):
+            WandbLogger(cfg=_enabled_cfg(), rank=0)
+
+    def test_offline_mode_needs_no_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """WANDB_MODE=offline authenticates without a key, so init still proceeds."""
+        mock = MagicMock()
+        monkeypatch.setattr("harness.wandb_logger.wandb", mock)
+        monkeypatch.delenv("WANDB_API_KEY", raising=False)
+        monkeypatch.setenv("WANDB_MODE", "offline")
+        WandbLogger(cfg=_enabled_cfg(), rank=0)
+        mock.init.assert_called_once()
 
 
 class TestContextManager:

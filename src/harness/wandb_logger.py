@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import wandb
@@ -28,6 +29,12 @@ class WandbLogger:
         if not self._enabled:
             logger.info(f"wandb disabled ({cfg.wandb=}, {rank=})")
             return
+
+        # Fail fast instead of letting wandb.init() hang on a login prompt in a non-interactive run
+        if not os.environ.get("WANDB_API_KEY") and os.environ.get("WANDB_MODE") != "offline":
+            raise RuntimeError(
+                "log.wandb=true but WANDB_API_KEY is unset; add it to .env, set WANDB_MODE=offline, or override log.wandb=false"
+            )
 
         if resume_id is not None:
             # Resume: fail loudly if wandb can't find the prior run rather than silently splitting metrics into a fresh one

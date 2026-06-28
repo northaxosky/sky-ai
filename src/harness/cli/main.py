@@ -9,6 +9,7 @@ from typing import Annotated
 
 import torch
 import typer
+from dotenv import load_dotenv
 
 from harness.checkpoint import CheckpointBundle, load_checkpoint
 from harness.config.loader import load_config
@@ -16,6 +17,9 @@ from harness.config.schema import LogConfig, RunConfig
 from harness.log import get_logger, setup_logging
 from harness.sample import sample as sample_fn
 from harness.training.loop import DTYPE_MAP, build_model
+
+# Load repo-root .env (HF_TOKEN, WANDB_API_KEY, ...) so train/eval/sample inherit local secrets
+load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
 app = typer.Typer(
     name="skyai",

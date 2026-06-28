@@ -102,7 +102,17 @@ class ModelConfig(BaseModel):
     def _gpt2_rejects_modern_fields(self) -> ModelConfig:
         if self.family == "gpt2":
             modern_only = {"n_kv_head", "rope_theta", "logit_softcap"}
-            explicit = modern_only & self.model_fields_set
+            # Reject only fields the user *meaningfully* set to a non-default value.
+            # A full config dump — e.g. a checkpoint manifest via model_dump() —
+            # re-feeds every field, so the harmless modern-field defaults land in
+            # model_fields_set on reload; those must round-trip cleanly rather than
+            # fail load_checkpoint.
+            fields = type(self).model_fields
+            explicit = {
+                name
+                for name in modern_only & self.model_fields_set
+                if getattr(self, name) != fields[name].get_default()
+            }
             if explicit:
                 raise ValueError(
                     f"family='gpt2' is classic GPT-2 and does not use modern fields; remove: {sorted(explicit)}"

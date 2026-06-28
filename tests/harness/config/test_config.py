@@ -142,6 +142,26 @@ class TestSchema:
         assert cfg.model.tie_weights is True
         assert cfg.model.logit_softcap is None
 
+    def test_gpt2_family_survives_full_dump_roundtrip(self) -> None:
+        # Regression: a checkpoint manifest stores config.model_dump(), which
+        # re-feeds the modern-field defaults; reloading (load_checkpoint) must not
+        # trip the gpt2 validator on those harmless serialized defaults.
+        d = _valid_run_dict()
+        d["model"]["family"] = "gpt2"
+        cfg = RunConfig.model_validate(d)
+        reloaded = RunConfig.model_validate(cfg.model_dump(mode="json"))
+        assert reloaded.model.family == "gpt2"
+        assert reloaded.model.logit_softcap == 15.0
+        assert reloaded.model.rope_theta == 100_000.0
+        assert reloaded.model.n_kv_head is None
+
+    def test_gpt2_family_rejects_nondefault_modern_field(self) -> None:
+        d = _valid_run_dict()
+        d["model"]["family"] = "gpt2"
+        d["model"]["rope_theta"] = 50_000.0
+        with pytest.raises(ValidationError, match="does not use modern fields"):
+            RunConfig.model_validate(d)
+
     def test_optimizer_and_schedule_modern_defaults(self) -> None:
         cfg = RunConfig.model_validate(_valid_run_dict())
         assert cfg.optim.type == "adamw"

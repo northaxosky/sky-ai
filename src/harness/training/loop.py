@@ -421,9 +421,7 @@ def _build_metrics(
     sample_text: list[str] | None,
 ) -> dict[str, Any]:
     """Bundle the runs quantitative output for golden test comparison"""
-    # Stream per-parameter so we don't concatenate every weight into a single
-    # multi-GB tensor at 1.5B scale. Cast to float32 for the square reduction
-    # to avoid bf16 overflow on large norms.
+    # Stream per-parameter (no multi-GB concat at 1.5B scale); reduce in float32 to avoid bf16 overflow on large norms
     total_sum = 0.0
     total_sq = 0.0
     n_params = 0

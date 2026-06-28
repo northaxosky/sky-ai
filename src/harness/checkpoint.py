@@ -60,9 +60,7 @@ def save_checkpoint(
     best_direction: str = "min",
 ) -> Path | None:
     """ "Automatically write step_n.pt + .json, update latest.json & best.*"""
-    # Barrier after rank 0 finishes writing so non-zero ranks can't race ahead
-    # and hit the next NCCL collective mid-write (timeout risk for large XL
-    # checkpoints).
+    # Barrier so non-zero ranks can't hit the next NCCL collective while rank 0 is mid-write (XL timeout risk)
     is_distributed = torch.distributed.is_available() and torch.distributed.is_initialized()
     try:
         if rank != 0:

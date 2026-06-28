@@ -34,8 +34,7 @@ class CausalSelfAttention(nn.Module):
         k = k.view(B, T, self.n_head, head_dim).transpose(1, 2)
         v = v.view(B, T, self.n_head, head_dim).transpose(1, 2)
 
-        # flash attention via SDPA; is_causal applies the lower-triangular mask
-        # internally without ever building a (T, T) tensor
+        # flash attention via SDPA; is_causal applies the causal mask without materializing a (T, T) tensor
         y = F.scaled_dot_product_attention(q, k, v, is_causal=True)  # (B, nh, T, hd)
 
         # (B, nh, T, hd) -> (B, T, nh, hd) -> (B, T, C): concatenate heads

@@ -65,9 +65,7 @@ def _download_on_rank_zero(split: str, rank: int) -> None:
     if is_distributed:
         dist.barrier()
     if rank != 0:
-        # Sanity-check that rank 0 actually produced the file; if it didn't,
-        # iterate_examples below would try to download from a non-zero rank
-        # and we'd race again.
+        # Verify rank 0 produced the file, else iterate_examples would re-download from a non-zero rank and race
         data_filename = DATA_CACHE_DIR / f"hellaswag_{split}.jsonl"
         if not data_filename.exists():
             raise RuntimeError(
@@ -112,8 +110,7 @@ def render_example(
         mask_rows.append([0] * len(ctx_tokens) + [1] * len(end_tokens))
         data["ending_tokens"].append(end_tokens)
 
-    # Rows differ in length; pad to max with zeros (mask is 0 there, so padding
-    # contributes nothing to the loss).
+    # Rows differ in length; pad to max with zeros (mask is 0 there, so padding doesn't affect the loss)
     max_len = max(len(row) for row in tok_rows)
     tokens = torch.zeros((4, max_len), dtype=torch.long)
     mask = torch.zeros((4, max_len), dtype=torch.long)

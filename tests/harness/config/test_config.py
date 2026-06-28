@@ -143,9 +143,7 @@ class TestSchema:
         assert cfg.model.logit_softcap is None
 
     def test_gpt2_family_survives_full_dump_roundtrip(self) -> None:
-        # Regression: a checkpoint manifest stores config.model_dump(), which
-        # re-feeds the modern-field defaults; reloading (load_checkpoint) must not
-        # trip the gpt2 validator on those harmless serialized defaults.
+        # Regression: a model_dump() round-trip (checkpoint reload) must not trip the gpt2 validator on serialized defaults.
         d = _valid_run_dict()
         d["model"]["family"] = "gpt2"
         cfg = RunConfig.model_validate(d)

@@ -30,9 +30,7 @@ class WandbLogger:
             return
 
         if resume_id is not None:
-            # Resume mode: fail loudly if wandb can't find the prior run instead
-            # of silently starting a fresh one (which would split metrics across
-            # two runs after a checkpoint restore).
+            # Resume: fail loudly if wandb can't find the prior run rather than silently splitting metrics into a fresh one
             run_id = resume_id
             resume_mode = "must"
         else:

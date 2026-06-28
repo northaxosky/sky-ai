@@ -188,8 +188,7 @@ def _check_checkpoint_dir(cfg: RunConfig) -> CheckResult:
         return ("FAIL", f"{d}: not writable")
     free_gb = shutil.disk_usage(d).free / (1024**3)
 
-    # AdamW saves params + (m, v) running stats in fp32; keep slack for small
-    # optimizer tensors and serialization overhead.
+    # AdamW saves params + (m, v) in fp32; keep slack for optimizer tensors and serialization overhead
     n_params = _estimate_model_params(cfg.model)
     per_ckpt_gb = n_params * 16 / (1024**3)
     needed_gb = per_ckpt_gb * (cfg.checkpoint.keep_last_n + 1)  # +1 for best.pt

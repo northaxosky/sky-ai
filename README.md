@@ -5,6 +5,8 @@ A from-scratch language model project: build two decoder LMs by hand — a faith
 sharing one training harness. Every layer, every optimizer step, and every
 tokenization decision is implemented and explained rather than imported.
 
+> **🤗 The faithful gpt2 is trained and published →** [MuteBuster/gpt2-muon-124m](https://huggingface.co/MuteBuster/gpt2-muon-124m) — val_loss 2.99, HellaSwag acc_norm 0.324, beating the AdamW reference.
+
 ## Why this repo exists
 
 Calling an API is one thing. Building the thing the API calls is another. The
@@ -35,7 +37,28 @@ Recipe ([`configs/gpt2.yaml`](./configs/gpt2.yaml)): standard nanoGPT — AdamW
 gradient clipping at 1.0, gradient accumulation to a 0.5M-token effective batch,
 bf16 mixed precision via autocast, Flash Attention through PyTorch SDPA, fused
 AdamW, `torch.compile`, and weight tying. Trained on FineWeb-Edu.
-*Cloud training results to be added here.*
+### Result: trained with the Muon recipe
+
+The headline cloud run swapped the AdamW+cosine baseline for a **Muon-split optimizer
++ warmup-stable-decay** schedule ([`configs/gpt2-muon.yaml`](./configs/gpt2-muon.yaml)):
+Newton-Schulz orthogonalized momentum on the 2D matrices, AdamW on the embeddings /
+norms / biases, LR annealed to zero over the final 40%. The canonical Muon learning
+rates diverge on the faithful arch (tied embeddings + LayerNorm + biases), so they were
+re-tuned down. On 8×A100, ~2.1h over 10B FineWeb-Edu tokens:
+
+| metric | **gpt2-muon** | GPT-2 124M | nanoGPT / llm.c (AdamW) |
+|---|---|---|---|
+| val_loss (FineWeb-Edu) | **2.99** | ~3.29 | 3.28 |
+| HellaSwag (acc_norm) | **0.324** | 0.294 | ~0.30 |
+| LAMBADA (ppl) | **27.8** | ~35 | — |
+
+The Muon recipe beats the AdamW+cosine reference on val_loss and HellaSwag at matched
+data and scale — a recipe-level, single-seed result (the
+[model card](https://huggingface.co/MuteBuster/gpt2-muon-124m) carries the full caveats).
+The weights are public:
+
+**🤗 [huggingface.co/MuteBuster/gpt2-muon-124m](https://huggingface.co/MuteBuster/gpt2-muon-124m)** —
+load with `AutoModelForCausalLM.from_pretrained("MuteBuster/gpt2-muon-124m")`.
 
 ## skyai — the modern stack, scaling toward ~1.5B
 
